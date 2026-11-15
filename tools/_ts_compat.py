@@ -13,7 +13,7 @@ _UTF8 = "utf-8"
 _CONSUMER_PKG = '{"name": "consumer", "type": "module"}\n'
 _CONSUMER_TS = (
     'import { VERSION, version } from "@archont561/tasknest";\n'
-    'if (VERSION !== version || !VERSION.endsWith("-dev.0")) {\n'
+    "if (VERSION !== version || !/^\\d+\\.\\d+\\.\\d+/.test(VERSION)) {\n"
     "  throw new Error(`Unexpected version: ${VERSION}`);\n"
     "}\n"
 )

@@ -2,8 +2,10 @@ import { resolve } from "node:path";
 import { createRuntimeAdapter, type RuntimeAdapter } from "@/src/adapter";
 import { type DiscoveredTask, discoverTasks, type TaskRegistry } from "@/src/discovery";
 import { TasknestError, ValidationError } from "@/src/errors";
-import { executePlan, resolvePlan, validateGraph } from "@/src/graph";
+import { executeOrder, executePlan, resolvePlan, validateGraph } from "@/src/graph";
+import { checkSkill, writeSkill } from "@/src/skill";
 import { parseTaskCliArgs } from "@/src/task";
+import { formatEffectSummary, selectTasksByMarks, validateRegistry } from "@/src/validation";
 import { VERSION } from "@/src/version";
 
 const GLOBAL_HELP = [
@@ -19,9 +21,10 @@ const GLOBAL_HELP = [
   "Commands:",
   "  ls                List discovered tasks",
   "  help [task...]    Show global or task help",
-  "  check             Validate discovery and dependency graph",
+  "  check             Validate discovery, marks, and dependency graph",
   "  plan <task...>    Show execution order without running tasks",
   "  run <task...>     Execute a task and its prerequisites",
+  "  skill             Check or write generated agent SKILL.md",
 ].join("\n");
 
 export interface RunCliOptions {
@@ -147,15 +150,53 @@ function formatTaskHelp(task: DiscoveredTask): string {
   return lines.join("\n");
 }
 
-function cmdLs(registry: TaskRegistry, stdout: (line: string) => void): number {
-  const tasks = Object.values(registry.tasks);
+function parseMarkFlags(tokens: readonly string[]): {
+  readonly marks: readonly string[];
+  readonly remaining: readonly string[];
+} {
+  const marks: string[] = [];
+  let idx = 0;
+  while (idx < tokens.length) {
+    const token = tokens[idx] as string;
+    if (token === "--mark") {
+      if (idx + 1 >= tokens.length) {
+        throw new ValidationError("--mark requires a value.");
+      }
+      marks.push(tokens[idx + 1] as string);
+      idx += 2;
+    } else if (token.startsWith("--mark=")) {
+      marks.push(token.slice("--mark=".length));
+      idx += 1;
+    } else {
+      break;
+    }
+  }
+  return { marks, remaining: tokens.slice(idx) };
+}
+
+function cmdLs(
+  registry: TaskRegistry,
+  rest: readonly string[],
+  stdout: (line: string) => void,
+): number {
+  const { marks, remaining } = parseMarkFlags(rest);
+  if (remaining.length > 0) {
+    throw new ValidationError("ls accepts only --mark <name> options.");
+  }
+  const tasks = Object.values(registry.tasks)
+    .sort((a, b) => a.canonicalName.localeCompare(b.canonicalName))
+    .filter(
+      (task) => marks.length === 0 || marks.some((mark) => task.definition.marks.includes(mark)),
+    );
   if (tasks.length === 0) {
     stdout("No tasks discovered.");
     return 0;
   }
   for (const task of tasks) {
+    const markSuffix =
+      task.definition.marks.length > 0 ? ` [marks: ${task.definition.marks.join(", ")}]` : "";
     const summary = task.description ? ` - ${task.description}` : "";
-    stdout(`${task.cliPath.join(" ")} (${task.canonicalName})${summary}`);
+    stdout(`${task.cliPath.join(" ")} (${task.canonicalName})${markSuffix}${summary}`);
   }
   return 0;
 }
@@ -174,7 +215,15 @@ function cmdHelp(
   return 0;
 }
 
-function cmdCheck(registry: TaskRegistry, stdout: (line: string) => void): number {
+function cmdCheck(
+  registry: TaskRegistry,
+  stdout: (line: string) => void,
+  stderr: (line: string) => void,
+): number {
+  const result = validateRegistry(registry);
+  for (const warning of result.warnings) {
+    stderr(`warning: ${warning}`);
+  }
   validateGraph(registry);
   stdout(`Checked ${Object.keys(registry.tasks).length} task(s).`);
   return 0;
@@ -185,10 +234,22 @@ function cmdPlan(
   rest: readonly string[],
   stdout: (line: string) => void,
 ): number {
-  const [task] = resolveTaskTokens(registry, rest);
-  const order = resolvePlan(registry, task.canonicalName);
+  const { marks, remaining } = parseMarkFlags(rest);
+  let order: readonly string[];
+  if (marks.length > 0) {
+    if (remaining.length > 0) {
+      throw new ValidationError("plan --mark cannot be combined with a task path.");
+    }
+    order = selectTasksByMarks(registry, marks);
+  } else {
+    const [task] = resolveTaskTokens(registry, remaining);
+    order = resolvePlan(registry, task.canonicalName);
+  }
   for (const name of order) {
     stdout(name);
+  }
+  for (const effect of formatEffectSummary(registry, order)) {
+    stdout(`effect: ${effect}`);
   }
   return 0;
 }
@@ -198,9 +259,31 @@ async function cmdRun(
   rest: readonly string[],
   globalArgs: GlobalArgs,
   adapter: RuntimeAdapter,
+  stdout: (line: string) => void,
   stderr: (line: string) => void,
 ): Promise<number> {
-  const [task, tail] = resolveTaskTokens(registry, rest);
+  const { marks, remaining } = parseMarkFlags(rest);
+  if (marks.length > 0) {
+    if (remaining.length > 0) {
+      throw new ValidationError("run --mark cannot be combined with a task path.");
+    }
+    const order = selectTasksByMarks(registry, marks);
+    for (const effect of formatEffectSummary(registry, order)) {
+      stdout(`effect: ${effect}`);
+    }
+    const report = await executeOrder(registry, order, {
+      verbose: globalArgs.verbose,
+      adapter,
+    });
+    if (report.exitCode !== 0) {
+      stderr(`Task '${report.failedTask}' failed: ${report.failureMessage ?? "unknown error"}`);
+      if (report.blocked.length > 0) {
+        stderr(`Blocked tasks: ${report.blocked.join(", ")}`);
+      }
+    }
+    return report.exitCode;
+  }
+  const [task, tail] = resolveTaskTokens(registry, remaining);
   const parsed = parseTaskCliArgs(task.definition, tail);
   const report = await executePlan(registry, task.canonicalName, {
     targetValues: parsed.values,
@@ -217,6 +300,61 @@ async function cmdRun(
   return report.exitCode;
 }
 
+async function cmdSkill(
+  registry: TaskRegistry,
+  rest: readonly string[],
+  stdout: (line: string) => void,
+  stderr: (line: string) => void,
+): Promise<number> {
+  let writeMode = false;
+  let force = false;
+  let outputPath: string | undefined;
+  let templatePath: string | undefined;
+  let idx = 0;
+
+  while (idx < rest.length) {
+    const token = rest[idx] as string;
+    if (token === "--write") {
+      writeMode = true;
+      idx += 1;
+    } else if (token === "--check") {
+      writeMode = false;
+      idx += 1;
+    } else if (token === "--force") {
+      force = true;
+      idx += 1;
+    } else if (token === "--output") {
+      outputPath = readGlobalValue(rest, idx, "--output");
+      idx += 2;
+    } else if (token === "--template") {
+      templatePath = readGlobalValue(rest, idx, "--template");
+      idx += 2;
+    } else {
+      throw new ValidationError(`Unknown option for skill: ${token}`);
+    }
+  }
+
+  if (writeMode) {
+    const written = await writeSkill(registry, {
+      ...(outputPath !== undefined ? { outputPath } : {}),
+      ...(templatePath !== undefined ? { templatePath } : {}),
+      force,
+    });
+    stdout(`WROTE ${written}`);
+    return 0;
+  }
+  const ok = await checkSkill(registry, {
+    ...(outputPath !== undefined ? { outputPath } : {}),
+    ...(templatePath !== undefined ? { templatePath } : {}),
+  });
+  if (!ok) {
+    stderr("DRIFT skill output is missing or out of date");
+    return 1;
+  }
+  stdout("OK skill is up to date");
+  return 0;
+}
+
 async function handleCommand(
   command: string,
   rest: readonly string[],
@@ -228,15 +366,17 @@ async function handleCommand(
 ): Promise<number> {
   switch (command) {
     case "ls":
-      return cmdLs(registry, stdout);
+      return cmdLs(registry, rest, stdout);
     case "help":
       return cmdHelp(registry, rest, stdout);
     case "check":
-      return cmdCheck(registry, stdout);
+      return cmdCheck(registry, stdout, stderr);
     case "plan":
       return cmdPlan(registry, rest, stdout);
     case "run":
-      return cmdRun(registry, rest, globalArgs, adapter, stderr);
+      return cmdRun(registry, rest, globalArgs, adapter, stdout, stderr);
+    case "skill":
+      return cmdSkill(registry, rest, stdout, stderr);
     default:
       throw new ValidationError(`Unknown command '${command}'.`);
   }

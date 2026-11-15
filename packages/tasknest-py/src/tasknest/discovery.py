@@ -98,7 +98,9 @@ def _discover_root(
         canonical = _DOT.join(parts)
         if canonical in tasks:
             raise DiscoveryError(f"Duplicate task name {canonical!r} found at {file_path}.")
-        tasks[canonical] = _load_file_task(file_path, canonical, parts, proj_root)
+        loaded = _load_file_task(file_path, canonical, parts, proj_root)
+        loaded.root_dir = root_dir
+        tasks[canonical] = loaded
 
 
 def discover_tasks(repo_root: Path, config_path: Path | None = None) -> TaskRegistry:

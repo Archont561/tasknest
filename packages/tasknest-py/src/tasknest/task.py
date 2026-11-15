@@ -65,6 +65,7 @@ class TaskDefinition:
     takes_context: bool = field(default=True, compare=False)
     options: tuple[TaskOption, ...] = field(default=(), compare=False)
     source_path: Path | None = field(default=None, compare=False)
+    root_dir: Path | None = field(default=None, compare=False)
     project_root: Path | None = field(default=None, compare=False)
     cli_path: tuple[str, ...] = field(default_factory=tuple, compare=False)
     _identity: tuple[object, ...] = field(init=False, repr=False)

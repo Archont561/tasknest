@@ -25,11 +25,31 @@ function makeRegistry(
         item.handler ?? (async () => {}),
       ),
       sourcePath: `${item.name}.ts`,
+      rootDir: ".",
       projectRoot: ".",
       description: "",
     };
   }
-  return createTaskRegistry({ repoRoot: ".", roots: [], marks: {}, jobs: 1 }, tasks);
+  return createTaskRegistry(
+    {
+      repoRoot: ".",
+      roots: [],
+      marks: {},
+      jobs: 1,
+      checks: {
+        strict: false,
+        requireDescription: false,
+        requireTests: false,
+        requireFeatures: false,
+        unknownMarks: "ignore",
+      },
+      skill: {
+        output: ".agents/skills/project-tools/SKILL.md",
+        command: "tasknest",
+      },
+    },
+    tasks,
+  );
 }
 
 test

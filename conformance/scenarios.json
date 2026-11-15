@@ -1,0 +1,271 @@
+{
+  "version": 1,
+  "scenarios": [
+    {
+      "id": "discovery-nested-and-ignored",
+      "tasks": [
+        {
+          "path": "check/dev",
+          "name": "dev",
+          "description": "Run dev checks.",
+          "prints": ["DEV_RAN"]
+        },
+        {
+          "path": "lint",
+          "name": "lint",
+          "description": "Lint project.",
+          "depends": ["check.dev"],
+          "prints": ["LINT_RAN"]
+        }
+      ],
+      "extraFiles": {
+        "tools/_helper": "helper_stub",
+        "tools/tests/ignored_test": "test_stub",
+        "tools/features/ignored.feature": "Feature: ignored\n"
+      },
+      "invocations": [
+        {
+          "args": ["ls"],
+          "expectExitCode": 0,
+          "expectStdoutContains": ["check dev (check.dev)", "lint (lint)"],
+          "expectStdoutNotContains": ["_helper", "ignored_test"]
+        },
+        {
+          "args": ["run", "lint"],
+          "expectExitCode": 0,
+          "expectStdoutContains": ["DEV_RAN", "LINT_RAN"]
+        }
+      ]
+    },
+    {
+      "id": "cli-longest-prefix-and-disambiguation",
+      "tasks": [
+        {
+          "path": "a",
+          "name": "a",
+          "description": "Parent task.",
+          "options": [
+            { "name": "arg", "type": "string", "default": "default" }
+          ],
+          "prints": ["A:{{arg}}"]
+        },
+        {
+          "path": "a/b",
+          "name": "b",
+          "description": "Child task.",
+          "prints": ["CHILD_B"]
+        }
+      ],
+      "invocations": [
+        {
+          "args": ["run", "a", "b"],
+          "expectExitCode": 0,
+          "expectStdoutContains": ["CHILD_B"]
+        },
+        {
+          "args": ["run", "a", "--", "b"],
+          "expectExitCode": 0,
+          "expectStdoutContains": ["A:b"],
+          "expectStdoutNotContains": ["CHILD_B"]
+        }
+      ]
+    },
+    {
+      "id": "cli-typed-options",
+      "tasks": [
+        {
+          "path": "greet",
+          "name": "greet",
+          "description": "Typed greet task.",
+          "options": [
+            { "name": "count", "type": "int", "default": 1 },
+            { "name": "dry_run", "type": "boolean", "default": false },
+            { "name": "mode", "type": "string", "choices": ["fast", "full"], "default": "fast" }
+          ],
+          "prints": ["GREET:{{count}}:{{dry_run}}:{{mode}}"]
+        }
+      ],
+      "invocations": [
+        {
+          "args": ["run", "greet", "--count", "3", "--dry-run", "--mode=full"],
+          "expectExitCode": 0,
+          "expectStdoutContains": ["GREET:3:true:full"]
+        },
+        {
+          "args": ["run", "greet", "--count", "not-an-int"],
+          "expectExitCode": 2
+        },
+        {
+          "args": ["run", "greet", "--mode", "invalid"],
+          "expectExitCode": 2
+        }
+      ]
+    },
+    {
+      "id": "graph-diamond-and-failure-blocking",
+      "tasks": [
+        {
+          "path": "base",
+          "name": "base",
+          "description": "Shared base.",
+          "prints": ["BASE_ONCE"]
+        },
+        {
+          "path": "left",
+          "name": "left",
+          "description": "Left branch.",
+          "depends": ["base"],
+          "prints": ["LEFT_OK"]
+        },
+        {
+          "path": "right",
+          "name": "right",
+          "description": "Right failing branch.",
+          "depends": ["base"],
+          "failMessage": "right failed"
+        },
+        {
+          "path": "top",
+          "name": "top",
+          "description": "Top target.",
+          "depends": ["left", "right"],
+          "prints": ["TOP_SHOULD_NOT_RUN"]
+        }
+      ],
+      "invocations": [
+        {
+          "args": ["run", "top"],
+          "expectExitCode": 1,
+          "expectStdoutContains": ["BASE_ONCE", "LEFT_OK"],
+          "expectStdoutNotContains": ["TOP_SHOULD_NOT_RUN"],
+          "expectStderrContains": ["right", "top"]
+        }
+      ]
+    },
+    {
+      "id": "graph-cycle-detection",
+      "tasks": [
+        {
+          "path": "x",
+          "name": "x",
+          "description": "Task X.",
+          "depends": ["y"]
+        },
+        {
+          "path": "y",
+          "name": "y",
+          "description": "Task Y.",
+          "depends": ["x"]
+        }
+      ],
+      "invocations": [
+        {
+          "args": ["check"],
+          "expectExitCode": 2,
+          "expectStderrContains": ["cycle"]
+        }
+      ]
+    },
+    {
+      "id": "validation-unknown-mark-and-mark-filtering",
+      "config": "[tasknest]\nconfig_version = 1\n\n[checks]\nstrict = true\nrequire_description = true\nunknown_marks = \"error\"\n\n[marks]\nfast = \"Fast task\"\nwrites = \"Modifies files\"\n",
+      "tasks": [
+        {
+          "path": "prep",
+          "name": "prep",
+          "description": "Unmarked prerequisite.",
+          "prints": ["PREP_RAN"]
+        },
+        {
+          "path": "fmt",
+          "name": "fmt",
+          "description": "Format files.",
+          "depends": ["prep"],
+          "marks": ["fast", "writes"],
+          "prints": ["FMT_RAN"]
+        },
+        {
+          "path": "slow",
+          "name": "slow",
+          "description": "Slow task.",
+          "prints": ["SLOW_RAN"]
+        }
+      ],
+      "invocations": [
+        {
+          "args": ["check"],
+          "expectExitCode": 0
+        },
+        {
+          "args": ["ls", "--mark", "fast"],
+          "expectExitCode": 0,
+          "expectStdoutContains": ["fmt (fmt)", "[marks: fast, writes]"],
+          "expectStdoutNotContains": ["slow (slow)"]
+        },
+        {
+          "args": ["run", "--mark", "fast"],
+          "expectExitCode": 0,
+          "expectStdoutContains": ["effect: fmt: marks=fast,writes", "PREP_RAN", "FMT_RAN"],
+          "expectStdoutNotContains": ["SLOW_RAN"]
+        }
+      ]
+    },
+    {
+      "id": "validation-strict-rejects-unknown-mark",
+      "config": "[tasknest]\nconfig_version = 1\n\n[checks]\nstrict = true\nunknown_marks = \"error\"\n\n[marks]\nfast = \"Fast task\"\n",
+      "tasks": [
+        {
+          "path": "bad",
+          "name": "bad",
+          "description": "Uses undeclared mark.",
+          "marks": ["mystery"]
+        }
+      ],
+      "invocations": [
+        {
+          "args": ["check"],
+          "expectExitCode": 2,
+          "expectStderrContains": ["mystery"]
+        }
+      ]
+    },
+    {
+      "id": "skill-drift-and-manual-overwrite-protection",
+      "requiresJinja": true,
+      "config": "[tasknest]\nconfig_version = 1\n\n[skill]\noutput = \"SKILL.md\"\ncommand = \"tasknest\"\n",
+      "tasks": [
+        {
+          "path": "lint",
+          "name": "lint",
+          "description": "Lint workspace.",
+          "marks": ["fast"]
+        }
+      ],
+      "extraFiles": {
+        "SKILL.md": "# Hand-written skill\nDo not clobber.\n"
+      },
+      "invocations": [
+        {
+          "args": ["skill", "--check"],
+          "expectExitCode": 1,
+          "expectStderrContains": ["DRIFT"]
+        },
+        {
+          "args": ["skill", "--write"],
+          "expectExitCode": 1,
+          "expectStderrContains": ["--force"]
+        },
+        {
+          "args": ["skill", "--write", "--force"],
+          "expectExitCode": 0,
+          "expectStdoutContains": ["WROTE"]
+        },
+        {
+          "args": ["skill", "--check"],
+          "expectExitCode": 0,
+          "expectStdoutContains": ["OK"]
+        }
+      ]
+    }
+  ]
+}

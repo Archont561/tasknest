@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 try:
     import tomllib  # type: ignore[import-not-found]  # stdlib in >=3.11; tomli on 3.10
@@ -15,6 +15,29 @@ from tasknest.errors import ConfigError
 
 DEFAULT_CONFIG_NAME = "tasknest.toml"
 _DOT = "."
+_CHECKS_SECTION = "checks"
+_IGNORE_MODE = "ignore"
+_VALID_MARK_MODES = frozenset({_IGNORE_MODE, "warn", "error"})
+
+
+@dataclass(frozen=True)
+class ChecksConfig:
+    """Structural and mark validation settings from [checks]."""
+
+    strict: bool = False
+    require_description: bool = False
+    require_tests: bool = False
+    require_features: bool = False
+    unknown_marks: Literal["ignore", "warn", "error"] = "ignore"
+
+
+@dataclass(frozen=True)
+class SkillConfig:
+    """Agent skill generation settings from [skill]."""
+
+    output: str = ".agents/skills/project-tools/SKILL.md"
+    command: str = "tasknest"
+    template: str | None = None
 
 
 @dataclass(frozen=True)
@@ -34,6 +57,8 @@ class TasknestConfig:
     roots: tuple[DiscoveryRoot, ...]
     marks: dict[str, str]
     jobs: int = 1
+    checks: ChecksConfig = field(default_factory=ChecksConfig)
+    skill: SkillConfig = field(default_factory=SkillConfig)
 
 
 def _require_str(entry: dict[str, Any], field: str, default: str | None = None) -> str:
@@ -97,6 +122,49 @@ def _extract_jobs(raw: dict[str, Any]) -> int:
     return jobs
 
 
+def _require_bool(table: dict[str, Any], key: str, default: bool, section: str) -> bool:
+    val = table.get(key, default)
+    if type(val) is not bool:
+        raise ConfigError(f"[{section}].{key} must be a boolean.")
+    return val
+
+
+def _parse_checks(raw_checks: object) -> ChecksConfig:
+    if raw_checks is None:
+        return ChecksConfig()
+    if not isinstance(raw_checks, dict):
+        raise ConfigError("[checks] must be a table.")
+    mode = raw_checks.get("unknown_marks", _IGNORE_MODE)
+    if mode not in _VALID_MARK_MODES:
+        raise ConfigError("[checks].unknown_marks must be 'ignore', 'warn', or 'error'.")
+    return ChecksConfig(
+        strict=_require_bool(raw_checks, "strict", False, _CHECKS_SECTION),
+        require_description=_require_bool(
+            raw_checks, "require_description", False, _CHECKS_SECTION
+        ),
+        require_tests=_require_bool(raw_checks, "require_tests", False, _CHECKS_SECTION),
+        require_features=_require_bool(raw_checks, "require_features", False, _CHECKS_SECTION),
+        unknown_marks=mode,
+    )
+
+
+def _parse_skill(raw_skill: object) -> SkillConfig:
+    if raw_skill is None:
+        return SkillConfig()
+    if not isinstance(raw_skill, dict):
+        raise ConfigError("[skill] must be a table.")
+    output = raw_skill.get("output", SkillConfig.output)
+    command = raw_skill.get("command", SkillConfig.command)
+    template = raw_skill.get("template")
+    if type(output) is not str or not output:
+        raise ConfigError("[skill].output must be a non-empty string.")
+    if type(command) is not str or not command:
+        raise ConfigError("[skill].command must be a non-empty string.")
+    if template is not None and (type(template) is not str or not template):
+        raise ConfigError("[skill].template must be a non-empty string.")
+    return SkillConfig(output=output, command=command, template=template)
+
+
 def load_config(repo_root: Path, config_path: Path | None = None) -> TasknestConfig:
     """Load tasknest.toml from repo_root or an explicit path."""
     resolved_root = repo_root.resolve()
@@ -114,4 +182,6 @@ def load_config(repo_root: Path, config_path: Path | None = None) -> TasknestCon
         roots=_extract_roots(raw),
         marks=_parse_marks(raw.get("marks")),
         jobs=_extract_jobs(raw),
+        checks=_parse_checks(raw.get("checks")),
+        skill=_parse_skill(raw.get("skill")),
     )

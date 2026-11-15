@@ -12,7 +12,7 @@ _CHECK_FILE = "check.ts"
 _UTF8 = "utf-8"
 _CONSUMER_PKG = '{"name": "consumer", "type": "module"}\n'
 _CONSUMER_TS = (
-    'import { VERSION, version } from "tasknest";\n'
+    'import { VERSION, version } from "@archont561/tasknest";\n'
     'if (VERSION !== version || !VERSION.endsWith("-dev.0")) {\n'
     "  throw new Error(`Unexpected version: ${VERSION}`);\n"
     "}\n"
@@ -62,7 +62,7 @@ def verify_ts_compat(root: Path) -> bool:
         tmp_path = Path(tmp)
         if not _run((_BUN, "pm", "pack", "--cwd", "packages/tasknest", "--destination", tmp), root):
             return False
-        tgz = next(tmp_path.glob("tasknest-*.tgz"))
+        tgz = next(tmp_path.glob("archont561-tasknest-*.tgz"))
         gates = (
             (_BUN, str(ts_bin / "publint"), "run", str(tgz), _STRICT),
             (_BUN, str(ts_bin / "attw"), str(tgz), "--profile", "esm-only", "--no-emoji"),

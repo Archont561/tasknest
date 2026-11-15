@@ -1,0 +1,151 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag (e.g. v0.1.0); defaults to current tag ref
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Resolve release tag
+        id: tag
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$INPUT_TAG" ]]; then
+            release_tag="$INPUT_TAG"
+          elif [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" == v* ]]; then
+            release_tag="${GITHUB_REF_NAME}"
+          else
+            echo "::error::Release workflow must run on a v* tag or with inputs.tag set."
+            exit 1
+          fi
+          if [[ "$release_tag" != v* ]]; then
+            echo "::error::Release tag '$release_tag' must start with 'v'."
+            exit 1
+          fi
+          echo "value=$release_tag" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ steps.tag.outputs.value }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify release tag and package versions
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.tag.outputs.value }}
+        run: |
+          set -euo pipefail
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::Tag $RELEASE_TAG is not reachable from origin/main."
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json
+          import os
+          import pathlib
+          import tomllib
+
+          tag = os.environ["RELEASE_TAG"].removeprefix("v")
+          pyproject = tomllib.loads(pathlib.Path("packages/python/pyproject.toml").read_text("utf-8"))
+          pkg = json.loads(pathlib.Path("packages/tasknest/package.json").read_text("utf-8"))
+          py_ver = pyproject["project"]["version"]
+          ts_ver = pkg["version"]
+          if pkg["name"] != "@archont561/tasknest":
+              raise SystemExit(f"Unexpected npm package name: {pkg['name']}")
+          if pyproject["project"]["name"] != "tasknest":
+              raise SystemExit(f"Unexpected PyPI package name: {pyproject['project']['name']}")
+          if py_ver.replace(".dev", "-dev.") != tag or ts_ver != tag:
+              raise SystemExit(
+                  f"Tag version {tag} does not match manifests (python={py_ver}, npm={ts_ver})."
+              )
+          PY
+      - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
+        with:
+          pixi-version: v0.84.2
+          cache: true
+      - run: pixi run --locked bun-install
+      - run: pixi run --locked tools run check
+      - run: pixi run --locked tools run test
+      - run: pixi run --locked tools run py_compat
+      - run: pixi run --locked tools run ts_compat
+      - run: pixi run --locked tools run build
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: pypi-dist
+          path: dist/release/pypi/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: npm-dist
+          path: dist/release/npm/
+          if-no-files-found: error
+
+  publish-pypi:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: pypi
+      url: https://pypi.org/p/tasknest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: pypi-dist
+          path: dist/pypi/
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          packages-dir: dist/pypi/
+
+  publish-npm:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/@archont561/tasknest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: npm-dist
+          path: dist/npm/
+      - name: Locate npm tarball
+        id: locate
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          tarballs=(dist/npm/*.tgz)
+          if [[ "${#tarballs[@]}" -ne 1 ]]; then
+            echo "::error::Expected exactly 1 npm tarball in dist/npm/, found ${#tarballs[@]}."
+            exit 1
+          fi
+          echo "tarball=${tarballs[0]}" >> "$GITHUB_OUTPUT"
+      - uses: JS-DevTools/npm-publish@0fd2f4369c5d6bcfcde6091a7c527d810b9b5c3f # v4.1.5
+        with:
+          package: ${{ steps.locate.outputs.tarball }}
+          access: public
+          provenance: true

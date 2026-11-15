@@ -16,7 +16,11 @@ function readPackageVersion(): string {
       continue;
     }
     const parsed = JSON.parse(readFileSync(candidate, "utf-8")) as PackageManifest;
-    if (parsed.name === "tasknest" && typeof parsed.version === "string" && parsed.version) {
+    if (
+      parsed.name === "@archont561/tasknest" &&
+      typeof parsed.version === "string" &&
+      parsed.version
+    ) {
       return parsed.version;
     }
   }

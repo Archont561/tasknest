@@ -58,3 +58,23 @@ rules:
     paths: .github/workflows/relock.yml
     level: error
     message: The generated relock workflow is required.
+  - id: require-ts-tsconfig
+    kind: file_exists
+    paths: packages/tasknest/tsconfig.json
+    level: error
+    message: packages/tasknest/tsconfig.json is required.
+  - id: tsconfig-pkg-root-alias
+    kind: json_path_equals
+    paths: 'packages/*/tsconfig.json'
+    path: $.compilerOptions.paths['@/*']
+    equals:
+      - './*'
+    level: error
+    message: Package tsconfig.json must map @/* to the package root (./*).
+  - id: ts-import-prefixes
+    kind: import_gate
+    language: js
+    paths: 'packages/**/*.{ts,tsx,js,jsx,mts,cts}'
+    forbid: '(^|/)\.\.(/|$)|^(/|~|#)|^@$'
+    level: error
+    message: Use @/, @<pkg-name>, or ./ imports instead of parent (../) or non-@ aliases.

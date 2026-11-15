@@ -1,0 +1,30 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.6.7/schema.json",
+  "files": {
+    "includes": ["packages/tasknest/**"]
+  },
+  "formatter": {
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "style": {
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "patterns": [
+              {
+                "group": ["..", "../*", "../**", "./../*", "./../**", "~/*", "#*"],
+                "message": "Use @/, @<pkg-name>, or ./ imports instead of parent (../) or non-@ aliases."
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

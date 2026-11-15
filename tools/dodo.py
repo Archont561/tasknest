@@ -11,7 +11,10 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 ROOT = Path(__file__).resolve().parent.parent
-DOIT_CONFIG = {"default_tasks": ["check"], "verbosity": 2, "dep_file": str(ROOT / ".doit.db")}
+_CHECK = "check"
+_PYTHON_TARGETS = ("tools", "packages/python")
+_BUN_X = ("bun", "x", "--bun", "--no-install")
+DOIT_CONFIG = {"default_tasks": [_CHECK], "verbosity": 2, "dep_file": str(ROOT / ".doit.db")}
 
 
 def _command(*argv: str) -> bool:
@@ -20,11 +23,18 @@ def _command(*argv: str) -> bool:
     return subprocess.run(argv, cwd=ROOT, check=False).returncode == 0
 
 
-def _action(*argv: str) -> dict:
-    return {"actions": [(_command, argv)], "uptodate": [False]}
+def _tasks(*items: object, basename: str | None = None) -> dict[str, object]:
+    task: dict[str, object] = {"actions": list(items), "uptodate": [False]}
+    if basename is not None:
+        task["basename"] = basename
+    return task
 
 
-def _render(check: bool) -> bool:
+def _action(*argv: str) -> dict[str, object]:
+    return _tasks((_command, argv))
+
+
+def _render(check_only: bool) -> bool:
     env = Environment(
         loader=FileSystemLoader(ROOT / "templates"),
         undefined=StrictUndefined,
@@ -38,7 +48,7 @@ def _render(check: bool) -> bool:
         actual = target.read_text(encoding="utf-8") if target.exists() else ""
         if actual == expected:
             print(f"OK {name}")
-        elif check:
+        elif check_only:
             success = False
             print(
                 "".join(
@@ -75,33 +85,42 @@ def _pages() -> bool:
     return render_pages(ROOT)
 
 
-def task_alint() -> dict:
+def task_alint() -> dict[str, object]:
     """Check repository policy."""
-    return _action("alint", "check")
+    return _action("alint", _CHECK)
 
 
-def task_sandbox_check() -> dict:
+def task_sandbox_check() -> dict[str, object]:
     """Check generated pixi-sandbox workflows and restore launcher."""
     return _action("pixi-sandbox", "init", "--script-path", "scripts/restore.sh", "--check")
 
 
-def task_format_check() -> dict:
-    """Check Python formatting."""
-    return _action("ruff", "format", "--check", "tools", "packages/python")
+def task_format_check() -> dict[str, object]:
+    """Check Python and TypeScript formatting."""
+    return _tasks(
+        (_command, ("ruff", "format", "--check", *_PYTHON_TARGETS)),
+        (_command, (*_BUN_X, "biome", "format", "packages/tasknest")),
+    )
 
 
-def task_lint() -> dict:
-    """Run Python linters."""
-    return {
-        "actions": [
-            (_command, ("ruff", "check", "tools", "packages/python")),
-            (_command, ("rude", "check", "packages/python/src")),
-        ],
-        "uptodate": [False],
-    }
+def task_lint() -> dict[str, object]:
+    """Run Python and TypeScript linters."""
+    return _tasks(
+        (_command, ("ruff", _CHECK, *_PYTHON_TARGETS)),
+        (_command, ("rude", _CHECK, "packages/python/src", "tools")),
+        (_command, (*_BUN_X, "biome", "lint", "packages/tasknest")),
+    )
 
 
-def task_actions_check() -> dict:
+def task_typecheck() -> dict[str, object]:
+    """Run Python (mypy) and TypeScript (tsc) type checks."""
+    return _tasks(
+        (_command, ("mypy", *_PYTHON_TARGETS[::-1])),
+        (_command, (*_BUN_X, "tsc", "-p", "packages/tasknest/tsconfig.json")),
+    )
+
+
+def task_actions_check() -> dict[str, object]:
     """Lint GitHub Actions workflows."""
     return _action(
         "actionlint",
@@ -112,30 +131,30 @@ def task_actions_check() -> dict:
     )
 
 
-def task_docs_check() -> dict:
+def task_docs_check() -> dict[str, object]:
     """Check generated documentation."""
-    return {"basename": "docs-check", "actions": [(_render, (True,))], "uptodate": [False]}
+    return _tasks((_render, (True,)), basename="docs-check")
 
 
-def task_docs_write() -> dict:
+def task_docs_write() -> dict[str, object]:
     """Generate documentation from templates."""
-    return {"basename": "docs-write", "actions": [(_render, (False,))], "uptodate": [False]}
+    return _tasks((_render, (False,)), basename="docs-write")
 
 
-def task_pages() -> dict:
+def task_pages() -> dict[str, object]:
     """Render root README.md into dist/ for GitHub Pages."""
-    return {"actions": [_pages], "uptodate": [False]}
+    return _tasks(_pages)
 
 
-def task_test() -> dict:
+def task_test() -> dict[str, object]:
     """Run Python and TypeScript tests."""
-    return {
-        "actions": [_test_python, (_command, ("bun", "test", "packages/tasknest/tests"))],
-        "uptodate": [False],
-    }
+    return _tasks(
+        _test_python,
+        (_command, ("bun", "test", "--coverage", "packages/tasknest/tests")),
+    )
 
 
-def task_check() -> dict:
+def task_check() -> dict[str, object]:
     """Run offline-friendly repository quality checks."""
     return {
         "actions": None,
@@ -144,6 +163,7 @@ def task_check() -> dict:
             "sandbox_check",
             "format_check",
             "lint",
+            "typecheck",
             "actions_check",
             "docs-check",
         ],

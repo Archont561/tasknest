@@ -54,7 +54,7 @@ export default function HomePage() {
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col justify-center gap-12 px-6 py-16">
         <section className="flex flex-col items-start gap-6">
           <span className="inline-flex items-center rounded-full border border-fd-border bg-fd-secondary px-3 py-1 text-xs font-medium text-fd-secondary-foreground">
-            v0.3.0 · Python &amp; TypeScript (Bun + Node.js)
+            v0.4.0 · Python &amp; TypeScript (Bun + Node.js)
           </span>
           <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
             Native Python &amp; TypeScript file-based task runners.

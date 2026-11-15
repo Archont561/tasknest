@@ -1,9 +1,10 @@
 ---
 id: TASKNEST-18
 title: Prove pixi-sandbox offline workflow
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-15T00:46:00Z'
+updated_date: '2026-11-15T16:15:00Z'
 labels:
   - task
 milestone: m-5
@@ -20,7 +21,7 @@ Publish an authorized sandbox branch and verify network-isolated restore, includ
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Offline test runs in an isolated environment
-- [ ] #2 Missing artifacts fail closed
-- [ ] #3 Document any unsupported dependencies and bootstrap prerequisites
+- [x] #1 Offline restore runs in an isolated environment (`scripts/restore.sh` + `pixi install --frozen --offline`)
+- [x] #2 Missing/corrupted artifacts fail closed (byte/hash verification in `scripts/restore.sh`)
+- [x] #3 Document unsupported dependencies and bootstrap prerequisites (`backlog/docs/doc-6 - Pixi-sandbox-offline-setup.md`)
 <!-- AC:END -->

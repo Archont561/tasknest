@@ -11,9 +11,9 @@ Tasknest is intended to be a file-oriented task runner with native Python and Ty
 
 ## Current state (2026-11-15)
 
-`packages/python/` implements the M1 Python runner foundation (`@tool`, file-based discovery, `ToolContext`, sequential dependency execution, and CLI subcommands `ls`, `help`, `check`, `plan`, `run`). `packages/tasknest/` remains a TypeScript package scaffold pending M3. `tools/dodo.py` continues to run repository automation via `pixi run tools` until M2 validation is complete (`decision-5`).
+`packages/tasknest-py/` implements the M1 Python runner (`@tool`, file-based discovery, `ToolContext`, sequential dependency execution, and CLI subcommands `ls`, `help`, `check`, `plan`, `run`). `packages/tasknest-ts/` implements the native TypeScript runner (`tool`, discovery, graph execution, CLI, and explicit Bun + Node.js runtime adapters). Repository automation in `tools/` dogfoods Tasknest itself via `pixi run tools` (superseding the bootstrap `tools/dodo.py` graph from `decision-5`).
 
-Implemented repository infrastructure includes Pixi and Bun locks, pytest/Bun tests, tox wheel compatibility across Python 3.10–3.14, Bun/Node.js compatibility matrices, Ruff, Rude with rude-clean-code, alint, actionlint, Lefthook/Convco, Jinja-generated README and AGENTS, GitHub CI configuration, and project skills. See `README.md` for current commands and `backlog/docs/doc-6 - Pixi-sandbox-offline-setup.md` for sandbox limitations.
+Implemented repository infrastructure includes Pixi and Bun locks, pytest/Bun tests, tox wheel compatibility across Python 3.10–3.14, Bun (`1.1`, `1.4`, `latest`) and Node.js (`20`, `22`, `24`) compatibility matrices, Ruff, Rude with rude-clean-code, gherlint, alint, Biome, tsc, actionlint, Lefthook/Convco, Jinja-generated README and AGENTS, GitHub CI and release workflows (`v0.1.0`), and `pixi-sandbox` offline restore (`sandbox/developer-linux-64`). See `README.md` for current commands and `backlog/docs/doc-6 - Pixi-sandbox-offline-setup.md` for sandbox limitations.
 
 ## Scope and non-goals
 

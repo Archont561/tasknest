@@ -1,7 +1,7 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.6.7/schema.json",
   "files": {
-    "includes": ["packages/tasknest/**", "!packages/tasknest/dist", "!**/node_modules"]
+    "includes": ["packages/tasknest-ts/**", "!packages/tasknest-ts/dist", "!**/node_modules"]
   },
   "formatter": {
     "indentStyle": "space",

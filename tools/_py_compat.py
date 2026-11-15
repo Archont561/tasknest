@@ -71,8 +71,8 @@ def _verify_venv_install(
 
 
 def verify_py_compat(root: Path) -> bool:
-    """Build packages/python wheel and sdist and verify clean isolated installs."""
-    pkg_dir = root / "packages/python"
+    """Build packages/tasknest-py wheel and sdist and verify clean isolated installs."""
+    pkg_dir = root / "packages/tasknest-py"
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
         if not _run((sys.executable, "-m", "hatchling", "build", "-d", tmp), pkg_dir):

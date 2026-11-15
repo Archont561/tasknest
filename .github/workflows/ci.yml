@@ -19,7 +19,7 @@ jobs:
       - run: pixi run --locked tools run test
       - run: pixi run --locked tools run py_compat
       - run: pixi run --locked tools run ts_compat
-      - run: pixi run --locked bun pm pack --cwd packages/tasknest --destination "${{ runner.temp }}/ts-dist"
+      - run: pixi run --locked bun pm pack --cwd packages/tasknest-ts --destination "${{ runner.temp }}/ts-dist"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: tasknest-tarball

@@ -9,7 +9,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Archont561/tasknest.git",
-    "directory": "packages/tasknest"
+    "directory": "packages/tasknest-ts"
   },
   "bugs": {
     "url": "https://github.com/Archont561/tasknest/issues"

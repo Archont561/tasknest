@@ -8,9 +8,9 @@ from pathlib import Path
 from tasknest import ToolContext, ToolError, tool
 
 
-@tool(description="Build, pack, and verify packages/tasknest tarball compatibility.")
+@tool(description="Build, pack, and verify packages/tasknest-ts tarball compatibility.")
 def ts_compat(ctx: ToolContext) -> None:
-    """Build, pack, and verify packages/tasknest tarball compatibility."""
+    """Build, pack, and verify packages/tasknest-ts tarball compatibility."""
     tools_dir = str(Path(__file__).resolve().parent)
     if tools_dir not in sys.path:
         sys.path.insert(0, tools_dir)

@@ -32,8 +32,8 @@ def build(ctx: ToolContext, out_dir: Path = Path("dist/release")) -> None:
         directory.mkdir(parents=True, exist_ok=True)
     ctx.run(
         [sys.executable, "-m", "hatchling", "build", "-d", str(pypi_dir)],
-        cwd=Path("packages/python"),
+        cwd=Path("packages/tasknest-py"),
     )
-    ctx.run(["bun", "pm", "pack", "--cwd", "packages/tasknest", "--destination", str(npm_dir)])
+    ctx.run(["bun", "pm", "pack", "--cwd", "packages/tasknest-ts", "--destination", str(npm_dir)])
     ctx.run(["convco", "changelog", "-m", "1", "-o", str(target / "CHANGELOG.md")])
     _write_npm_output(npm_dir)

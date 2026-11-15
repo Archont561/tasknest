@@ -64,9 +64,9 @@ rules:
     message: The generated relock workflow is required.
   - id: require-ts-tsconfig
     kind: file_exists
-    paths: packages/tasknest/tsconfig.json
+    paths: packages/tasknest-ts/tsconfig.json
     level: error
-    message: packages/tasknest/tsconfig.json is required.
+    message: packages/tasknest-ts/tsconfig.json is required.
   - id: tsconfig-pkg-root-alias
     kind: json_path_equals
     paths: 'packages/*/tsconfig.json'

@@ -35,7 +35,7 @@
 >
 > Tasknest is a file-oriented task runner targeting task registration,
 > dependencies, quality gates, CLI arguments, and execution reports.
-> `packages/python/` implements the M1 Python runner and `packages/tasknest/`
+> `packages/tasknest-py/` implements the M1 Python runner and `packages/tasknest-ts/`
 > implements the TypeScript runner (Bun & Node.js); repository automation in
 > `tools/` dogfoods Tasknest itself.
 
@@ -78,7 +78,7 @@ pixi run tools run test
 
 ## Layout
 
-- `packages/python/` and `packages/tasknest/`: native Python and TypeScript task runners
+- `packages/tasknest-py/` and `packages/tasknest-ts/`: native Python and TypeScript task runners
 - `tools/`: repository automation tasks executed by Tasknest
 - `templates/`: Jinja2 sources for this README and `AGENTS.md`
 - `tasknest.toml`: Tasknest workspace configuration

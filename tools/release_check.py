@@ -27,8 +27,10 @@ def _resolve_release_tag(tag: str) -> str:
 
 def _verify_manifest_versions(repo_root: Path, release_tag: str) -> None:
     expected = release_tag.removeprefix("v")
-    pyproject = tomllib.loads((repo_root / "packages/python/pyproject.toml").read_text("utf-8"))
-    pkg = json.loads((repo_root / "packages/tasknest/package.json").read_text("utf-8"))
+    pyproject = tomllib.loads(
+        (repo_root / "packages/tasknest-py/pyproject.toml").read_text("utf-8")
+    )
+    pkg = json.loads((repo_root / "packages/tasknest-ts/package.json").read_text("utf-8"))
     py_name = pyproject["project"]["name"]
     ts_name = pkg["name"]
     if py_name != "tasknest" or ts_name != "@archont561/tasknest":

@@ -12,7 +12,7 @@
         "typescript": "7.0.2",
       },
     },
-    "packages/tasknest": {
+    "packages/tasknest-ts": {
       "name": "@archont561/tasknest",
       "version": "0.1.0",
       "bin": {
@@ -45,7 +45,7 @@
 
     "@archont561/bun-test-utils": ["@archont561/bun-test-utils@0.2.0", "", { "dependencies": { "@clack/prompts": "1.8.1", "citty": "^0.2.2", "smol-toml": "^1.9.0" }, "peerDependencies": { "@aboviq/bun-test-cucumber": ">=0.2.0", "fast-check": ">=4.0.0", "happy-dom": ">=20.0.0", "playwright": ">=1.40.0" }, "optionalPeers": ["@aboviq/bun-test-cucumber", "fast-check", "happy-dom", "playwright"], "bin": { "test-utils": "dist/cli.js" } }, "sha512-lv0k/dp10PSgxucwtcJraGCpvMFRvyI/e3sIaRhpNdeW39KNjmF+jkEZmL0a9RUXBNofnyl1OiCtUUryi8Sr5g=="],
 
-    "@archont561/tasknest": ["@archont561/tasknest@workspace:packages/tasknest"],
+    "@archont561/tasknest": ["@archont561/tasknest@workspace:packages/tasknest-ts"],
 
     "@arethetypeswrong/cli": ["@arethetypeswrong/cli@0.18.5", "", { "dependencies": { "@arethetypeswrong/core": "0.18.5", "chalk": "^4.1.2", "cli-table3": "^0.6.3", "commander": "^10.0.1", "marked": "^9.1.2", "marked-terminal": "^7.1.0", "semver": "^7.5.4" }, "bin": { "attw": "./dist/index.js" } }, "sha512-gM+8vRsQOD/Uc7EnBedUhkG5OCsDWE4uoak5QvomGpMpaky0Eh41p04nIMgrWb8EOmqZUJGc6zz9hsP6E56R7g=="],
 

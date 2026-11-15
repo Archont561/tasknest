@@ -56,11 +56,13 @@ def _verify_consumer(root: Path, tgz: Path, tmp_path: Path) -> bool:
 
 
 def verify_ts_compat(root: Path) -> bool:
-    """Pack packages/tasknest and verify publint, attw, and consumer resolution."""
-    ts_bin = root / "packages/tasknest/node_modules/.bin"
+    """Pack packages/tasknest-ts and verify publint, attw, and consumer resolution."""
+    ts_bin = root / "packages/tasknest-ts/node_modules/.bin"
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
-        if not _run((_BUN, "pm", "pack", "--cwd", "packages/tasknest", "--destination", tmp), root):
+        if not _run(
+            (_BUN, "pm", "pack", "--cwd", "packages/tasknest-ts", "--destination", tmp), root
+        ):
             return False
         tgz = next(tmp_path.glob("archont561-tasknest-*.tgz"))
         gates = (

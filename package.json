@@ -3,8 +3,11 @@
   "private": true,
   "description": "Repository development CLI dependencies",
   "devDependencies": {
+    "@biomejs/biome": "2.6.7",
+    "@types/bun": "1.4.4",
     "backlog.md": "1.55.3",
-    "skills": "1.8.1"
+    "skills": "1.8.1",
+    "typescript": "7.0.2"
   },
   "packageManager": "bun@1.4.2",
   "workspaces": [

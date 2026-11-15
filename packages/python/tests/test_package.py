@@ -19,6 +19,7 @@ def test_version_matches_manifest() -> None:
     assert expected == VERSION
     assert __version__ == VERSION
     assert VERSION.endswith(".dev0")
+    assert manifest["project"]["scripts"]["tasknest"] == "tasknest.cli:main"
 
 
 def test_every_source_module_has_corresponding_test() -> None:

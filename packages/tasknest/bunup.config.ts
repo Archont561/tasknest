@@ -1,7 +1,7 @@
 import { type DefineConfigItem, defineConfig } from "bunup";
 
 const config: DefineConfigItem = defineConfig({
-  entry: ["src/index.ts"],
+  entry: ["src/index.ts", "src/bin.ts"],
   outDir: "dist",
   sourceBase: "src",
   format: "esm",

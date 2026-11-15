@@ -2,9 +2,9 @@
   Generated file - do not edit README.md by hand.
 
   Source template : templates/README.md.j2
-  Generator       : Jinja2 via tools/dodo.py
-  Regenerate with : pixi run tools docs-write
-  Verify in CI    : pixi run tools docs-check
+  Generator       : Jinja2 via tools/docs_write.py
+  Regenerate with : pixi run tools run docs_write
+  Verify in CI    : pixi run tools run docs_check
 -->
 
 <h1 align="center">Tasknest</h1>
@@ -31,12 +31,13 @@
   </a>
 </p>
 
-> Scaffold for native Python and TypeScript file-based task runners with shared conventions.
+> Native Python and TypeScript file-based task runners with shared conventions.
 >
 > Tasknest is a file-oriented task runner targeting task registration,
 > dependencies, quality gates, CLI arguments, and execution reports.
-> `packages/python/` implements the M1 Python runner foundation; `packages/tasknest/`
-> remains a TypeScript scaffold pending M3, and repository automation still uses doit (`tools/dodo.py`).
+> `packages/python/` implements the M1 Python runner and `packages/tasknest/`
+> implements the TypeScript runner (Bun & Node.js); repository automation in
+> `tools/` dogfoods Tasknest itself.
 
 ### 🏠 [Homepage](https://github.com/Archont561/tasknest#readme)
 
@@ -66,21 +67,21 @@ pixi run bun-install
 pixi run hooks-install
 ```
 
-`pixi run tools` uses doit (`tools/dodo.py`), not the future Tasknest runner. List available automation tasks with `pixi run tools list`. Use `pixi run tools docs-write` after editing `templates/`; CI runs `docs-check`. Python compatibility environments are defined in `tox.ini`. Bun installs the pinned repository CLIs from `bun.lock`; invoke them using `pixi run skills` and `pixi run backlog`.
+`pixi run tools` runs Tasknest directly against `tools/` (`tasknest.toml`). List available automation tasks with `pixi run tools ls`, validate the task graph with `pixi run tools check`, and run tasks with `pixi run tools run <task>`. Use `pixi run tools run docs_write` after editing `templates/`; CI runs `docs_check`. Python compatibility environments are defined in `tox.ini`. Bun installs the pinned repository CLIs from `bun.lock`; invoke them using `pixi run skills` and `pixi run backlog`.
 
 ## Run checks & tests
 
 ```sh
-pixi run tools check
-pixi run tools test
+pixi run tools run check
+pixi run tools run test
 ```
 
 ## Layout
 
-- `packages/python/` and `packages/tasknest/`: native runner scaffolds
-- `tools/dodo.py`: doit task graph and repository automation
+- `packages/python/` and `packages/tasknest/`: native Python and TypeScript task runners
+- `tools/`: repository automation tasks executed by Tasknest
 - `templates/`: Jinja2 sources for this README and `AGENTS.md`
-- `tasknest.toml`: proposed future runner configuration, not consumed yet
+- `tasknest.toml`: Tasknest workspace configuration
 - `pixi-sandbox.toml` and `scripts/restore.sh`: offline sandbox configuration and restore launcher; see [offline setup](<backlog/docs/doc-6 - Pixi-sandbox-offline-setup.md>)
 - `backlog/`: milestones, tasks, ADRs, and specification docs
 
@@ -109,4 +110,4 @@ This project is [MIT](https://github.com/Archont561/tasknest/blob/main/LICENSE) 
 
 ***
 
-*This README was generated from [`templates/README.md.j2`](templates/README.md.j2) via `pixi run tools docs-write`.*
+*This README was generated from [`templates/README.md.j2`](templates/README.md.j2) via `pixi run tools run docs_write`.*

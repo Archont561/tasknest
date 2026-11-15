@@ -20,24 +20,28 @@ rules:
     paths: templates
     level: error
     message: templates directory is required.
-  - id: tools-dodo-only
+  - id: tools-python-only
     kind: dir_only_contains
     select: tools
     allow:
-      - dodo.py
-      - _*.py
+      - '*.py'
     level: error
-    message: tools may only contain dodo.py and private _*.py helpers.
+    message: tools may only contain Python task and helper files (*.py).
   - id: tools-no-subdirectories
     kind: dir_absent
     paths: 'tools/*'
     level: error
     message: tools may not contain subdirectories.
-  - id: tools-require-dodo
+  - id: tools-require-check
     kind: file_exists
-    paths: tools/dodo.py
+    paths: tools/check.py
     level: error
-    message: tools/dodo.py is required.
+    message: tools/check.py is required.
+  - id: tools-require-test
+    kind: file_exists
+    paths: tools/test.py
+    level: error
+    message: tools/test.py is required.
   - id: require-sandbox-config
     kind: file_exists
     paths: pixi-sandbox.toml

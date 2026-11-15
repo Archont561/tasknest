@@ -18,7 +18,7 @@
    ╚═╝   ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝╚══════╝╚══════╝   ╚═╝</pre>
 
 <p>
-  <img alt="Version: 0.1.0" src="https://img.shields.io/badge/version-0.1.0-blue.svg?cacheSeconds=2592000" />
+  <img alt="Version: 0.2.0" src="https://img.shields.io/badge/version-0.2.0-blue.svg?cacheSeconds=2592000" />
   <img alt="Status: scaffold" src="https://img.shields.io/badge/status-scaffold-orange.svg" />
   <a href="https://github.com/Archont561/tasknest/tree/main/backlog/docs" target="_blank">
     <img alt="Documentation" src="https://img.shields.io/badge/documentation-yes-brightgreen.svg" />
@@ -35,8 +35,8 @@
 >
 > Tasknest is a file-oriented task runner targeting task registration,
 > dependencies, quality gates, CLI arguments, and execution reports.
-> `packages/tasknest-py/` implements the M1 Python runner and `packages/tasknest-ts/`
-> implements the TypeScript runner (Bun & Node.js); repository automation in
+> `packages/tasknest-py/` implements the M1–M3 Python runner and `packages/tasknest-ts/`
+> implements the M1–M3 TypeScript runner (Bun & Node.js); repository automation in
 > `tools/` dogfoods Tasknest itself.
 
 ### 🏠 [Homepage](https://github.com/Archont561/tasknest#readme)

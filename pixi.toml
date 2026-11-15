@@ -24,6 +24,9 @@ alint = ">=0.22,<1"
 rude = ">=0.1a4,<0.2"
 rude-clean-code = ">=0.3.1,<0.4"
 gherlint = ">=0.5,<0.6"
+hypothesis = ">=6.170.15, <7"
+pytest-bdd = ">=9.0.1, <10"
+tomli-w = ">=1.2, <2"
 
 [tasks]
 bun-install = "bun install --frozen-lockfile"

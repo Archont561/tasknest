@@ -33,10 +33,10 @@
 
 > Scaffold for native Python and TypeScript file-based task runners with shared conventions.
 >
-> Tasknest is a proposed file-oriented task runner targeting task registration,
-> dependencies, quality gates, CLI arguments, and execution reports. This
-> repository currently provides repository automation and package scaffolds,
-> **not the task runner itself**.
+> Tasknest is a file-oriented task runner targeting task registration,
+> dependencies, quality gates, CLI arguments, and execution reports.
+> `packages/python/` implements the M1 Python runner foundation; `packages/tasknest/`
+> remains a TypeScript scaffold pending M3, and repository automation still uses doit (`tools/dodo.py`).
 
 ### 🏠 [Homepage](https://github.com/Archont561/tasknest#readme)
 

@@ -9,11 +9,11 @@ created_date: '2026-11-15T00:45:00Z'
 
 Tasknest is intended to be a file-oriented task runner with native Python and TypeScript implementations and shared conventions. It targets the repetitive automation in Archont561 repositories: task registration, dependencies, quality gates, CLI arguments and execution reports.
 
-## Current state (2026-11-14)
+## Current state (2026-11-15)
 
-This repository is a scaffold, **not a working Tasknest runner**. `packages/python/` and `packages/tasknest/` contain minimal package skeletons. `tools/dodo.py` runs repository tasks using doit, exposed by `pixi run tools`. The proposed `tasknest.toml` is not consumed by a runner.
+`packages/python/` implements the M1 Python runner foundation (`@tool`, file-based discovery, `ToolContext`, sequential dependency execution, and CLI subcommands `ls`, `help`, `check`, `plan`, `run`). `packages/tasknest/` remains a TypeScript package scaffold pending M3. `tools/dodo.py` continues to run repository automation via `pixi run tools` until M2 validation is complete (`decision-5`).
 
-Implemented repository infrastructure includes Pixi and Bun locks, pytest/Bun smoke tests, tox configuration, Ruff, Rude with rude-clean-code, alint, actionlint, Lefthook/Convco, Jinja-generated README and AGENTS, GitHub CI configuration, and project skills. The multi-version CI matrix has not been run in this workspace. See `README.md` for current commands and `backlog/docs/doc-6 - Pixi-sandbox-offline-setup.md` for sandbox limitations.
+Implemented repository infrastructure includes Pixi and Bun locks, pytest/Bun tests, tox wheel compatibility across Python 3.10–3.14, Bun/Node.js compatibility matrices, Ruff, Rude with rude-clean-code, alint, actionlint, Lefthook/Convco, Jinja-generated README and AGENTS, GitHub CI configuration, and project skills. See `README.md` for current commands and `backlog/docs/doc-6 - Pixi-sandbox-offline-setup.md` for sandbox limitations.
 
 ## Scope and non-goals
 

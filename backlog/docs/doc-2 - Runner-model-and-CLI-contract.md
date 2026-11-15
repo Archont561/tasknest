@@ -103,4 +103,4 @@ tasknest [GLOBAL OPTIONS] <command> [ARGS...]
 - Short CLI alias (e.g. `tg`) — deferred.
 - Strict structural policy enforcement (`[checks]` in `tasknest.toml`), mark filtering (`--mark`), and built-in ecosystem adapters — `M2`.
 - Native TypeScript runner (`Bun` and `Node.js` adapters) and cross-language conformance fixtures — `M3`.
-- Parallel scheduler (`jobs > 1`), affected selection, machine-readable JSON reports, and output caching — `M4`.
+- Parallel scheduler (`jobs > 1`), affected selection (`ctx.affected` + conservative selectors), machine-readable JSON reports, `ctx.output(...)` / `ctx.deps[...]` / `ctx.env(...)`, opt-in output caching (`.tasknest/cache/`), and DAG-aware `watch` mode — `M4`.

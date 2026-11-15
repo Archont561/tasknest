@@ -481,8 +481,8 @@
       "extraFiles": {
         "package.json": "{\"name\": \"mono\", \"workspaces\": [\"apps/*\"]}",
         "bun.lock": "",
-        "apps/web/package.json": "{\"scripts\": {\"build\": \"echo WEB_MANIFEST_BUILD\", \"lint\": \"echo WEB_LINT\"}, \"tasknest\": {\"tasks\": {\"lint\": {\"marks\": [\"fast\"], \"depends\": [\"build\"]}}}}",
-        "apps/api/package.json": "{\"scripts\": {\"build\": \"echo API_BUILD\", \"lint\": \"echo API_LINT\"}, \"tasknest\": {\"tasks\": {\"lint\": {\"marks\": [\"fast\"]}}}}"
+        "apps/web/package.json": "{\"scripts\": {\"build\": \"echo WEB_MANIFEST_BUILD\", \"lint\": \"echo WEB_LINT\"}, \"tasknest\": {\"tasks\": {\"lint\": {\"cmd\": [\"echo\", \"WEB_LINT\"], \"marks\": [\"fast\"], \"depends\": [\"build\"]}}}}",
+        "apps/api/package.json": "{\"scripts\": {\"build\": \"echo API_BUILD\", \"lint\": \"echo API_LINT\"}, \"tasknest\": {\"tasks\": {\"lint\": {\"cmd\": [\"echo\", \"API_LINT\"], \"marks\": [\"fast\"]}}}}"
       },
       "invocations": [
         {

@@ -18,7 +18,7 @@
    ╚═╝   ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝╚══════╝╚══════╝   ╚═╝</pre>
 
 <p>
-  <img alt="Version: 0.1.0-dev.0" src="https://img.shields.io/badge/version-0.1.0--dev.0-blue.svg?cacheSeconds=2592000" />
+  <img alt="Version: 0.1.0" src="https://img.shields.io/badge/version-0.1.0-blue.svg?cacheSeconds=2592000" />
   <img alt="Status: scaffold" src="https://img.shields.io/badge/status-scaffold-orange.svg" />
   <a href="https://github.com/Archont561/tasknest/tree/main/backlog/docs" target="_blank">
     <img alt="Documentation" src="https://img.shields.io/badge/documentation-yes-brightgreen.svg" />

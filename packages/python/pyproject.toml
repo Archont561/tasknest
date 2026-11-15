@@ -1,0 +1,13 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tasknest"
+version = "0.1.0.dev0"
+description = "Python task runner scaffold"
+requires-python = ">=3.10"
+license = "MIT"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tasknest"]

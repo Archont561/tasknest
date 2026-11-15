@@ -14,7 +14,7 @@
     },
     "packages/tasknest": {
       "name": "@archont561/tasknest",
-      "version": "0.1.0-dev.0",
+      "version": "0.1.0",
       "bin": {
         "tasknest": "./dist/bin.js",
       },

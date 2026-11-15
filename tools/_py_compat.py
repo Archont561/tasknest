@@ -18,7 +18,7 @@ _BIN = "bin"
 _SMOKE_CODE = (
     "import tasknest; "
     "assert tasknest.VERSION == tasknest.__version__ "
-    "and tasknest.VERSION.endswith('.dev0'), tasknest.VERSION"
+    "and bool(tasknest.VERSION), tasknest.VERSION"
 )
 
 

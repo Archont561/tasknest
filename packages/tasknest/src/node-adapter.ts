@@ -1,23 +1,17 @@
 import { spawnSync } from "node:child_process";
 import { parse as parseTomlDocument } from "smol-toml";
-import type { RuntimeAdapter, RuntimeSpawnResult, SpawnOptions } from "@/src/adapter";
-import { ConfigError } from "@/src/errors";
+import {
+  parseTomlWith,
+  type RuntimeAdapter,
+  type RuntimeSpawnResult,
+  type SpawnOptions,
+} from "@/src/adapter";
 
 export function createNodeAdapter(): RuntimeAdapter {
   return {
     runtime: "node",
     parseToml(content: string): Record<string, unknown> {
-      let parsed: unknown;
-      try {
-        parsed = parseTomlDocument(content);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        throw new ConfigError(`Invalid TOML: ${message}`);
-      }
-      if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-        throw new ConfigError("Invalid TOML: root document must be a table.");
-      }
-      return parsed as Record<string, unknown>;
+      return parseTomlWith(parseTomlDocument, content);
     },
     spawn(argv: readonly string[], options: SpawnOptions): RuntimeSpawnResult {
       const [cmd, ...args] = argv;

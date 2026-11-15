@@ -4,8 +4,7 @@ import { type DiscoveredTask, discoverTasks, type TaskRegistry } from "@/src/dis
 import { TasknestError, ValidationError } from "@/src/errors";
 import { executePlan, resolvePlan, validateGraph } from "@/src/graph";
 import { parseTaskCliArgs } from "@/src/task";
-
-export const version = "0.1.0-dev.0";
+import { VERSION } from "@/src/version";
 
 const GLOBAL_HELP = [
   "Usage: tasknest [GLOBAL OPTIONS] <command> [ARGS...]",
@@ -41,6 +40,13 @@ interface GlobalArgs {
   readonly rest: string[];
 }
 
+function readGlobalValue(argv: readonly string[], idx: number, flag: string): string {
+  if (idx + 1 >= argv.length) {
+    throw new ValidationError(`${flag} requires a path.`);
+  }
+  return argv[idx + 1] as string;
+}
+
 function parseGlobalArgs(argv: readonly string[], defaultRoot: string): GlobalArgs {
   let root = defaultRoot;
   let configPath: string | undefined;
@@ -64,19 +70,13 @@ function parseGlobalArgs(argv: readonly string[], defaultRoot: string): GlobalAr
       verbose = true;
       idx += 1;
     } else if (token === "--root") {
-      if (idx + 1 >= argv.length) {
-        throw new ValidationError("--root requires a path.");
-      }
-      root = argv[idx + 1] as string;
+      root = readGlobalValue(argv, idx, "--root");
       idx += 2;
     } else if (token.startsWith("--root=")) {
       root = token.slice("--root=".length);
       idx += 1;
     } else if (token === "--config") {
-      if (idx + 1 >= argv.length) {
-        throw new ValidationError("--config requires a path.");
-      }
-      configPath = argv[idx + 1] as string;
+      configPath = readGlobalValue(argv, idx, "--config");
       idx += 2;
     } else if (token.startsWith("--config=")) {
       configPath = token.slice("--config=".length);
@@ -147,6 +147,76 @@ function formatTaskHelp(task: DiscoveredTask): string {
   return lines.join("\n");
 }
 
+function cmdLs(registry: TaskRegistry, stdout: (line: string) => void): number {
+  const tasks = Object.values(registry.tasks);
+  if (tasks.length === 0) {
+    stdout("No tasks discovered.");
+    return 0;
+  }
+  for (const task of tasks) {
+    const summary = task.description ? ` - ${task.description}` : "";
+    stdout(`${task.cliPath.join(" ")} (${task.canonicalName})${summary}`);
+  }
+  return 0;
+}
+
+function cmdHelp(
+  registry: TaskRegistry,
+  rest: readonly string[],
+  stdout: (line: string) => void,
+): number {
+  if (rest.length === 0) {
+    stdout(GLOBAL_HELP);
+    return 0;
+  }
+  const [task] = resolveTaskTokens(registry, rest);
+  stdout(formatTaskHelp(task));
+  return 0;
+}
+
+function cmdCheck(registry: TaskRegistry, stdout: (line: string) => void): number {
+  validateGraph(registry);
+  stdout(`Checked ${Object.keys(registry.tasks).length} task(s).`);
+  return 0;
+}
+
+function cmdPlan(
+  registry: TaskRegistry,
+  rest: readonly string[],
+  stdout: (line: string) => void,
+): number {
+  const [task] = resolveTaskTokens(registry, rest);
+  const order = resolvePlan(registry, task.canonicalName);
+  for (const name of order) {
+    stdout(name);
+  }
+  return 0;
+}
+
+async function cmdRun(
+  registry: TaskRegistry,
+  rest: readonly string[],
+  globalArgs: GlobalArgs,
+  adapter: RuntimeAdapter,
+  stderr: (line: string) => void,
+): Promise<number> {
+  const [task, tail] = resolveTaskTokens(registry, rest);
+  const parsed = parseTaskCliArgs(task.definition, tail);
+  const report = await executePlan(registry, task.canonicalName, {
+    targetValues: parsed.values,
+    targetPositionals: parsed.positionals,
+    verbose: globalArgs.verbose,
+    adapter,
+  });
+  if (report.exitCode !== 0) {
+    stderr(`Task '${report.failedTask}' failed: ${report.failureMessage ?? "unknown error"}`);
+    if (report.blocked.length > 0) {
+      stderr(`Blocked tasks: ${report.blocked.join(", ")}`);
+    }
+  }
+  return report.exitCode;
+}
+
 async function handleCommand(
   command: string,
   rest: readonly string[],
@@ -157,57 +227,16 @@ async function handleCommand(
   stderr: (line: string) => void,
 ): Promise<number> {
   switch (command) {
-    case "ls": {
-      const tasks = Object.values(registry.tasks);
-      if (tasks.length === 0) {
-        stdout("No tasks discovered.");
-        return 0;
-      }
-      for (const task of tasks) {
-        const summary = task.description ? ` - ${task.description}` : "";
-        stdout(`${task.cliPath.join(" ")} (${task.canonicalName})${summary}`);
-      }
-      return 0;
-    }
-    case "help": {
-      if (rest.length === 0) {
-        stdout(GLOBAL_HELP);
-        return 0;
-      }
-      const [task] = resolveTaskTokens(registry, rest);
-      stdout(formatTaskHelp(task));
-      return 0;
-    }
-    case "check": {
-      validateGraph(registry);
-      stdout(`Checked ${Object.keys(registry.tasks).length} task(s).`);
-      return 0;
-    }
-    case "plan": {
-      const [task] = resolveTaskTokens(registry, rest);
-      const order = resolvePlan(registry, task.canonicalName);
-      for (const name of order) {
-        stdout(name);
-      }
-      return 0;
-    }
-    case "run": {
-      const [task, tail] = resolveTaskTokens(registry, rest);
-      const parsed = parseTaskCliArgs(task.definition, tail);
-      const report = await executePlan(registry, task.canonicalName, {
-        targetValues: parsed.values,
-        targetPositionals: parsed.positionals,
-        verbose: globalArgs.verbose,
-        adapter,
-      });
-      if (report.exitCode !== 0) {
-        stderr(`Task '${report.failedTask}' failed: ${report.failureMessage ?? "unknown error"}`);
-        if (report.blocked.length > 0) {
-          stderr(`Blocked tasks: ${report.blocked.join(", ")}`);
-        }
-      }
-      return report.exitCode;
-    }
+    case "ls":
+      return cmdLs(registry, stdout);
+    case "help":
+      return cmdHelp(registry, rest, stdout);
+    case "check":
+      return cmdCheck(registry, stdout);
+    case "plan":
+      return cmdPlan(registry, rest, stdout);
+    case "run":
+      return cmdRun(registry, rest, globalArgs, adapter, stderr);
     default:
       throw new ValidationError(`Unknown command '${command}'.`);
   }
@@ -224,7 +253,7 @@ export async function runCli(
   try {
     const globalArgs = parseGlobalArgs(argv, options.cwd ?? process.cwd());
     if (globalArgs.showVersion) {
-      stdout(`tasknest ${version}`);
+      stdout(`tasknest ${VERSION}`);
       return 0;
     }
     if (globalArgs.showHelp || globalArgs.rest.length === 0) {

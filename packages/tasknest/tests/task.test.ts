@@ -1,5 +1,5 @@
 import { ValidationError } from "@/src/errors";
-import { coerceOptionValue, parseTaskCliArgs, tool } from "@/src/task";
+import { coerceOptionValue, createDefaultArgValues, parseTaskCliArgs, tool } from "@/src/task";
 import { expect, test } from "@/tests/test";
 
 test("tool builds TaskDefinition with normalized CLI flags and metadata", () => {
@@ -102,3 +102,23 @@ test.prop(
   },
   { numRuns: 30 },
 );
+
+test("createDefaultArgValues populates defaults, multiples, and optionals", () => {
+  const def = tool(
+    {
+      name: "demo",
+      options: [
+        { name: "jobs", type: "int", default: 2 },
+        { name: "tags", type: "string", multiple: true },
+        { name: "note", type: "string", optional: true },
+        { name: "required", type: "string" },
+      ],
+    },
+    async () => {},
+  );
+  expect(createDefaultArgValues(def)).toEqual({
+    jobs: 2,
+    tags: [],
+    note: undefined,
+  });
+});

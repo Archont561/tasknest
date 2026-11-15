@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from tasknest.context import ToolContext
@@ -35,20 +34,6 @@ class _RunState:
     exit_code: int = 0
 
 
-def _same_task(candidate: TaskDefinition, dep: TaskDefinition) -> bool:
-    if candidate is dep or candidate.callable_fn is dep.callable_fn:
-        return True
-    if candidate.source_path is None:
-        return False
-    dep_code = getattr(dep.callable_fn, "__code__", None)
-    if dep_code is None:
-        return False
-    return (
-        Path(dep_code.co_filename).resolve() == candidate.source_path.resolve()
-        and dep.callable_fn.__name__ == candidate.callable_fn.__name__
-    )
-
-
 def _resolve_dep_name(
     task: TaskDefinition, dep: str | TaskDefinition, registry: TaskRegistry
 ) -> str:
@@ -57,7 +42,7 @@ def _resolve_dep_name(
             raise GraphError(f"Unknown dependency {dep!r} required by {task.name!r}.")
         return dep
     for name, candidate in registry.tasks.items():
-        if _same_task(candidate, dep):
+        if candidate == dep:
             return name
     raise GraphError(f"Unregistered dependency {dep.name!r} required by {task.name!r}.")
 
@@ -87,9 +72,7 @@ def validate_graph(registry: TaskRegistry) -> dict[str, tuple[str, ...]]:
     return resolved
 
 
-def plan_execution(registry: TaskRegistry, target_name: str) -> tuple[str, ...]:
-    """Return sequential topological execution order for target_name."""
-    deps_map = validate_graph(registry)
+def _collect_order(deps_map: dict[str, tuple[str, ...]], target_name: str) -> tuple[str, ...]:
     order: list[str] = []
     seen: set[str] = set()
 
@@ -103,6 +86,12 @@ def plan_execution(registry: TaskRegistry, target_name: str) -> tuple[str, ...]:
 
     collect(target_name)
     return tuple(order)
+
+
+def plan_execution(registry: TaskRegistry, target_name: str) -> tuple[str, ...]:
+    """Return sequential topological execution order for target_name."""
+    deps_map = validate_graph(registry)
+    return _collect_order(deps_map, target_name)
 
 
 def _invoke_task(
@@ -158,7 +147,7 @@ def run_plan(
 ) -> ExecutionReport:
     """Execute planned tasks sequentially; failures block dependents."""
     deps_map = validate_graph(registry)
-    order = plan_execution(registry, target_name)
+    order = _collect_order(deps_map, target_name)
     state = _RunState()
     for name in order:
         if any(dep in state.unmet for dep in deps_map[name]):

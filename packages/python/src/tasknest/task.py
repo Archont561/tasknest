@@ -37,21 +37,40 @@ class TaskOption:
         return f"list[{label}]" if self.is_list else label
 
 
+def _task_identity(callable_fn: Any, source_path: Path | None) -> tuple[object, ...]:
+    code = getattr(callable_fn, "__code__", None)
+    path: Path | None = None
+    if source_path is not None:
+        path = source_path.resolve()
+    elif code is not None:
+        raw_file = getattr(code, "co_filename", "")
+        if raw_file and not raw_file.startswith("<"):
+            path = Path(raw_file).resolve()
+    qualname = str(getattr(callable_fn, "__qualname__", getattr(callable_fn, "__name__", "")))
+    if path is not None and qualname and "<locals>" not in qualname:
+        return (path, qualname)
+    return (id(callable_fn),)
+
+
 @dataclass
 class TaskDefinition:
     """Registered Tasknest task metadata and callable."""
 
-    callable_fn: Any
-    name: str
-    depends: tuple[str | TaskDefinition, ...] = ()
-    marks: tuple[str, ...] = ()
-    requires: tuple[str, ...] = ()
-    description: str = ""
-    takes_context: bool = True
-    options: tuple[TaskOption, ...] = ()
-    source_path: Path | None = None
-    project_root: Path | None = None
-    cli_path: tuple[str, ...] = field(default_factory=tuple)
+    callable_fn: Any = field(compare=False)
+    name: str = field(compare=False)
+    depends: tuple[str | TaskDefinition, ...] = field(default=(), compare=False)
+    marks: tuple[str, ...] = field(default=(), compare=False)
+    requires: tuple[str, ...] = field(default=(), compare=False)
+    description: str = field(default="", compare=False)
+    takes_context: bool = field(default=True, compare=False)
+    options: tuple[TaskOption, ...] = field(default=(), compare=False)
+    source_path: Path | None = field(default=None, compare=False)
+    project_root: Path | None = field(default=None, compare=False)
+    cli_path: tuple[str, ...] = field(default_factory=tuple, compare=False)
+    _identity: tuple[object, ...] = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self._identity = _task_identity(self.callable_fn, self.source_path)
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         return self.callable_fn(*args, **kwargs)

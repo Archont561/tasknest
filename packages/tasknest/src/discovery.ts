@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { extname, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createRuntimeAdapter, type RuntimeAdapter } from "@/src/adapter";
@@ -10,6 +10,23 @@ const RESERVED_TOP_DIRS = new Set(["tests", "features"]);
 const TASK_EXTENSIONS = new Set([".ts", ".mts", ".js", ".mjs"]);
 
 let importSequence = 0;
+const seenModuleSources = new Map<string, { content: string; seq: number }>();
+
+function resolveImportUrl(filePath: string): string {
+  const href = pathToFileURL(filePath).href;
+  const content = readFileSync(filePath, "utf-8");
+  const prev = seenModuleSources.get(filePath);
+  if (prev === undefined) {
+    seenModuleSources.set(filePath, { content, seq: 0 });
+    return href;
+  }
+  if (prev.content === content) {
+    return prev.seq === 0 ? href : `${href}?t=${prev.seq}`;
+  }
+  const nextSeq = ++importSequence;
+  seenModuleSources.set(filePath, { content, seq: nextSeq });
+  return `${href}?t=${nextSeq}`;
+}
 
 export interface DiscoveredTask {
   readonly canonicalName: string;
@@ -82,7 +99,7 @@ function deriveSegments(rootDir: string, filePath: string, namespace: string): s
 }
 
 async function loadSingleTaskFromFile(filePath: string): Promise<TaskDefinition> {
-  const url = `${pathToFileURL(filePath).href}?t=${++importSequence}`;
+  const url = resolveImportUrl(filePath);
   let mod: Record<string, unknown> = {};
   const collected = await collectTaskRegistrations(async () => {
     try {

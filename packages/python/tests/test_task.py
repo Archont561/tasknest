@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -9,7 +10,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 from tasknest.errors import ValidationError
-from tasknest.task import TaskOption, coerce_option_value, tool
+from tasknest.task import TaskDefinition, TaskOption, coerce_option_value, tool
 
 if TYPE_CHECKING:
     from tasknest.context import ToolContext
@@ -81,3 +82,34 @@ def test_property_coerce_bool_truthy(token: str) -> None:
 def test_property_coerce_bool_falsy(token: str) -> None:
     opt = TaskOption(param_name="fix", cli_name="fix", base_type=bool)
     assert coerce_option_value(opt, token) is False
+
+
+def test_task_definition_equality_matches_across_reloads_and_distinguishes_others(
+    tmp_path: Path,
+) -> None:
+    mod_file = tmp_path / "sample_mod.py"
+    mod_file.write_text(
+        "from tasknest import tool\n"
+        "@tool()\n"
+        "def alpha() -> None: pass\n"
+        "@tool()\n"
+        "def beta() -> None: pass\n",
+        encoding="utf-8",
+    )
+    spec_a = importlib.util.spec_from_file_location("_mod_a", mod_file)
+    spec_b = importlib.util.spec_from_file_location("_mod_b", mod_file)
+    assert spec_a is not None
+    assert spec_a.loader is not None
+    assert spec_b is not None
+    assert spec_b.loader is not None
+    mod_a = importlib.util.module_from_spec(spec_a)
+    mod_b = importlib.util.module_from_spec(spec_b)
+    spec_a.loader.exec_module(mod_a)
+    spec_b.loader.exec_module(mod_b)
+
+    assert isinstance(mod_a.alpha, TaskDefinition)
+    assert mod_a.alpha == mod_b.alpha
+    assert mod_a.alpha != mod_b.beta
+
+    closures = [tool()(lambda: None) for _ in range(2)]
+    assert closures[0] != closures[1]

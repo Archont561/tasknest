@@ -2,10 +2,26 @@
 [tasknest]
 config_version = 1
 
+[discovery]
+workspaces = true
+
 [[discovery.roots]]
 path = "tools"
 namespace = ""
 project_root = "."
+
+[[discovery.manifests]]
+path = "packages/tasknest-py"
+
+[[discovery.manifests]]
+path = "packages/tasknest-ts"
+persistent_scripts = ["dev"]
+exclude_scripts = ["prepack"]
+
+[[discovery.manifests]]
+path = "apps/docs"
+persistent_scripts = ["dev"]
+exclude_scripts = ["postinstall"]
 
 [checks]
 strict = true
@@ -20,6 +36,7 @@ ci = "Included in CI checks"
 offline = "Expected not to require network access"
 network = "Requires network access"
 writes = "May modify project files"
+dev = "Long-running development servers and watchers"
 
 [execution]
 jobs = 1

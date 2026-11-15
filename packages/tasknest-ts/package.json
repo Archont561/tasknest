@@ -42,6 +42,7 @@
     "access": "public"
   },
   "scripts": {
+    "dev": "bunup --watch",
     "build": "bunup",
     "prepack": "bun run build",
     "test": "bun test"

@@ -16,7 +16,13 @@ import {
 import { type ReportMetadata, serializeJsonReport, writeJsonReport } from "@/src/report";
 import { checkSkill, writeSkill } from "@/src/skill";
 import { parseTaskCliArgs } from "@/src/task";
-import { formatEffectSummary, selectTasksByMarks, validateRegistry } from "@/src/validation";
+import {
+  formatEffectSummary,
+  matchesPackage,
+  selectTasksByMarks,
+  selectTasksEach,
+  validateRegistry,
+} from "@/src/validation";
 import { VERSION } from "@/src/version";
 import { type WatchCycle, WatchSession } from "@/src/watch";
 
@@ -58,6 +64,8 @@ interface GlobalArgs {
 
 interface RunCliFlags {
   readonly marks: string[];
+  readonly packages: string[];
+  each: string | undefined;
   jobs: number | undefined;
   cacheMode: CacheMode;
   jsonOutput: boolean;
@@ -150,6 +158,7 @@ function parseGlobalArgs(argv: readonly string[], defaultRoot: string): GlobalAr
 function resolveTaskTokens(
   registry: TaskRegistry,
   tokens: readonly string[],
+  packages: readonly string[] = [],
 ): readonly [DiscoveredTask, readonly string[]] {
   const pathTokens: string[] = [];
   let tailIndex = tokens.length;
@@ -167,16 +176,30 @@ function resolveTaskTokens(
     throw new ValidationError("A task path is required.");
   }
 
+  let tail = tokens.slice(tailIndex);
+  if (tail[0] === "--") {
+    tail = tail.slice(1);
+  }
+
+  if (packages.length === 1 && pathTokens[0] !== packages[0] && !pathTokens[0]?.includes(".")) {
+    const pkg = packages[0] as string;
+    const scoped = registry.resolveCliPath([...pkg.split("."), ...pathTokens]);
+    if (scoped) {
+      return [scoped[0], [...scoped[1], ...tail]];
+    }
+  }
+
   const resolved = registry.resolveCliPath(pathTokens);
   if (!resolved) {
     throw new ValidationError(`Unknown task '${pathTokens.join(" ")}'.`);
   }
   const [task, unusedPathTokens] = resolved;
-  let tail = [...unusedPathTokens, ...tokens.slice(tailIndex)];
-  if (tail[0] === "--") {
-    tail = tail.slice(1);
+  if (packages.length > 0 && !matchesPackage(task, packages)) {
+    throw new ValidationError(
+      `Task '${task.canonicalName}' is not in selected package(s): ${packages.join(", ")}.`,
+    );
   }
-  return [task, tail];
+  return [task, [...unusedPathTokens, ...tail]];
 }
 
 function formatTaskHelp(task: DiscoveredTask): string {
@@ -194,6 +217,9 @@ function formatTaskHelp(task: DiscoveredTask): string {
   if (task.definition.outputs.length > 0) {
     lines.push(`Outputs: ${task.definition.outputs.join(", ")}`);
   }
+  if (task.definition.persistent) {
+    lines.push("Persistent: true");
+  }
   if (task.definition.options.length > 0) {
     lines.push("Options:");
     for (const opt of task.definition.options) {
@@ -204,11 +230,18 @@ function formatTaskHelp(task: DiscoveredTask): string {
   return lines.join("\n");
 }
 
-function parseMarkFlags(tokens: readonly string[]): {
+function parseSelectFlags(
+  tokens: readonly string[],
+  allowEach = true,
+): {
   readonly marks: readonly string[];
+  readonly packages: readonly string[];
+  readonly each: string | undefined;
   readonly remaining: readonly string[];
 } {
   const marks: string[] = [];
+  const packages: string[] = [];
+  let each: string | undefined;
   let idx = 0;
   while (idx < tokens.length) {
     const token = tokens[idx] as string;
@@ -216,11 +249,17 @@ function parseMarkFlags(tokens: readonly string[]): {
       const [val, nextIdx] = readFlagValue(tokens, idx, "--mark");
       marks.push(val);
       idx = nextIdx;
+    } else if (token === "-p" || matchesFlag(token, "--package")) {
+      const [val, nextIdx] = readFlagValue(tokens, idx, "--package");
+      packages.push(val);
+      idx = nextIdx;
+    } else if (allowEach && matchesFlag(token, "--each")) {
+      [each, idx] = readFlagValue(tokens, idx, "--each");
     } else {
       break;
     }
   }
-  return { marks, remaining: tokens.slice(idx) };
+  return { marks, packages, each, remaining: tokens.slice(idx) };
 }
 
 function parseRunFlags(tokens: readonly string[]): {
@@ -229,6 +268,8 @@ function parseRunFlags(tokens: readonly string[]): {
 } {
   const flags: RunCliFlags = {
     marks: [],
+    packages: [],
+    each: undefined,
     jobs: undefined,
     cacheMode: "default",
     jsonOutput: false,
@@ -248,6 +289,12 @@ function parseRunFlags(tokens: readonly string[]): {
       const [val, nextIdx] = readFlagValue(tokens, idx, "--mark");
       flags.marks.push(val);
       idx = nextIdx;
+    } else if (token === "-p" || matchesFlag(token, "--package")) {
+      const [val, nextIdx] = readFlagValue(tokens, idx, "--package");
+      flags.packages.push(val);
+      idx = nextIdx;
+    } else if (matchesFlag(token, "--each")) {
+      [flags.each, idx] = readFlagValue(tokens, idx, "--each");
     } else if (token === "-j" || matchesFlag(token, "--jobs")) {
       const [val, nextIdx] = readFlagValue(tokens, idx, "--jobs");
       flags.jobs = parsePositiveInt(val, "--jobs");
@@ -330,15 +377,17 @@ function cmdLs(
   rest: readonly string[],
   stdout: (line: string) => void,
 ): number {
-  const { marks, remaining } = parseMarkFlags(rest);
+  const { marks, packages, remaining } = parseSelectFlags(rest, false);
   if (remaining.length > 0) {
-    throw new ValidationError("ls accepts only --mark <name> options.");
+    throw new ValidationError("ls accepts only --mark <name> and --package <name> options.");
   }
   const tasks = Object.values(registry.tasks)
     .sort((a, b) => a.canonicalName.localeCompare(b.canonicalName))
-    .filter(
-      (task) => marks.length === 0 || marks.some((mark) => task.definition.marks.includes(mark)),
-    );
+    .filter((task) => {
+      const markOk =
+        marks.length === 0 || marks.some((mark) => task.definition.marks.includes(mark));
+      return markOk && matchesPackage(task, packages);
+    });
   if (tasks.length === 0) {
     stdout("No tasks discovered.");
     return 0;
@@ -346,8 +395,11 @@ function cmdLs(
   for (const task of tasks) {
     const markSuffix =
       task.definition.marks.length > 0 ? ` [marks: ${task.definition.marks.join(", ")}]` : "";
+    const persistentSuffix = task.definition.persistent ? " [persistent]" : "";
     const summary = task.description ? ` - ${task.description}` : "";
-    stdout(`${task.cliPath.join(" ")} (${task.canonicalName})${markSuffix}${summary}`);
+    stdout(
+      `${task.cliPath.join(" ")} (${task.canonicalName})${markSuffix}${persistentSuffix}${summary}`,
+    );
   }
   return 0;
 }
@@ -385,15 +437,23 @@ function cmdPlan(
   rest: readonly string[],
   stdout: (line: string) => void,
 ): number {
-  const { marks, remaining } = parseMarkFlags(rest);
+  const { marks, packages, each, remaining } = parseSelectFlags(rest, true);
+  if (marks.length > 0 && each !== undefined) {
+    throw new ValidationError("plan --mark cannot be combined with --each.");
+  }
   let order: readonly string[];
-  if (marks.length > 0) {
+  if (each !== undefined) {
+    if (remaining.length > 0) {
+      throw new ValidationError("plan --each cannot be combined with a task path.");
+    }
+    order = selectTasksEach(registry, each, { packages });
+  } else if (marks.length > 0) {
     if (remaining.length > 0) {
       throw new ValidationError("plan --mark cannot be combined with a task path.");
     }
-    order = selectTasksByMarks(registry, marks);
+    order = selectTasksByMarks(registry, marks, { packages });
   } else {
-    const [task] = resolveTaskTokens(registry, remaining);
+    const [task] = resolveTaskTokens(registry, remaining, packages);
     order = resolvePlan(registry, task.canonicalName);
   }
   for (const name of order) {
@@ -492,18 +552,34 @@ async function cmdRun(
   adapter: RuntimeAdapter,
   stdout: (line: string) => void,
   stderr: (line: string) => void,
+  captureWriters: boolean,
 ): Promise<number> {
   const { flags, remaining } = parseRunFlags(rest);
   const affected = resolveAffectedContext(registry, flags, adapter);
   const effectiveJobs = computeWorkerBudget(flags.jobs ?? 1);
   const startedAt = new Date().toISOString();
   const startedMs = performance.now();
+  const writerOpts =
+    captureWriters || flags.jsonOutput
+      ? {
+          stdoutWriter: (chunk: string) => stdout(chunk.replace(/\r?\n$/, "")),
+          stderrWriter: (chunk: string) => stderr(chunk.replace(/\r?\n$/, "")),
+        }
+      : {};
 
-  if (flags.marks.length > 0) {
+  if (flags.marks.length > 0 && flags.each !== undefined) {
+    throw new ValidationError("run --mark cannot be combined with --each.");
+  }
+
+  if (flags.each !== undefined || flags.marks.length > 0) {
     if (remaining.length > 0) {
-      throw new ValidationError("run --mark cannot be combined with a task path.");
+      const flagName = flags.each !== undefined ? "--each" : "--mark";
+      throw new ValidationError(`run ${flagName} cannot be combined with a task path.`);
     }
-    const order = selectTasksByMarks(registry, flags.marks);
+    const order =
+      flags.each !== undefined
+        ? selectTasksEach(registry, flags.each, { packages: flags.packages })
+        : selectTasksByMarks(registry, flags.marks, { packages: flags.packages });
     if (!flags.jsonOutput) {
       for (const effect of formatEffectSummary(registry, order)) {
         stdout(`effect: ${effect}`);
@@ -513,12 +589,12 @@ async function cmdRun(
       executeOrder(registry, order, {
         verbose: globalArgs.verbose,
         adapter,
-        jobs: effectiveJobs,
+        ...(flags.jobs !== undefined ? { jobs: flags.jobs, explicitJobs: true } : {}),
         failFast: flags.failFast,
         cacheMode: flags.cacheMode,
         affected,
         quietStdout: flags.jsonOutput,
-        stderrWriter: (chunk) => stderr(chunk.replace(/\r?\n$/, "")),
+        ...writerOpts,
       }),
     );
     return emitRunOutputs(
@@ -528,13 +604,13 @@ async function cmdRun(
       affected,
       startedAt,
       performance.now() - startedMs,
-      effectiveJobs,
+      report.jobs ?? effectiveJobs,
       stdout,
       stderr,
     );
   }
 
-  const [task, tail] = resolveTaskTokens(registry, remaining);
+  const [task, tail] = resolveTaskTokens(registry, remaining, flags.packages);
   const parsed = parseTaskCliArgs(task.definition, tail);
   const report = await runWithQuietStdout(flags.jsonOutput, stderr, () =>
     executePlan(registry, task.canonicalName, {
@@ -542,12 +618,12 @@ async function cmdRun(
       targetPositionals: parsed.positionals,
       verbose: globalArgs.verbose,
       adapter,
-      jobs: effectiveJobs,
+      ...(flags.jobs !== undefined ? { jobs: flags.jobs, explicitJobs: true } : {}),
       failFast: flags.failFast,
       cacheMode: flags.cacheMode,
       affected,
       quietStdout: flags.jsonOutput,
-      stderrWriter: (chunk) => stderr(chunk.replace(/\r?\n$/, "")),
+      ...writerOpts,
     }),
   );
   return emitRunOutputs(
@@ -557,7 +633,7 @@ async function cmdRun(
     affected,
     startedAt,
     performance.now() - startedMs,
-    effectiveJobs,
+    report.jobs ?? effectiveJobs,
     stdout,
     stderr,
   );
@@ -679,6 +755,7 @@ async function handleCommand(
   adapter: RuntimeAdapter,
   stdout: (line: string) => void,
   stderr: (line: string) => void,
+  captureWriters: boolean,
 ): Promise<number> {
   switch (command) {
     case "ls":
@@ -690,7 +767,7 @@ async function handleCommand(
     case "plan":
       return cmdPlan(registry, rest, stdout);
     case "run":
-      return cmdRun(registry, rest, globalArgs, adapter, stdout, stderr);
+      return cmdRun(registry, rest, globalArgs, adapter, stdout, stderr, captureWriters);
     case "watch":
       return cmdWatch(registry, rest, globalArgs, adapter, stdout);
     case "skill":
@@ -704,6 +781,7 @@ export async function runCli(
   argv: readonly string[],
   options: RunCliOptions = {},
 ): Promise<number> {
+  const captureWriters = options.stdout !== undefined || options.stderr !== undefined;
   const stdout = options.stdout ?? ((line: string) => console.log(line));
   const stderr = options.stderr ?? ((line: string) => console.error(line));
   const adapter = options.adapter ?? createRuntimeAdapter();
@@ -735,6 +813,7 @@ export async function runCli(
       adapter,
       stdout,
       stderr,
+      captureWriters,
     );
   } catch (err) {
     if (err instanceof TasknestError) {

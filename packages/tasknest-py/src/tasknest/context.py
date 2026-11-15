@@ -13,12 +13,14 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
+from tasknest._process import ProcessSpec, run_streaming_process
 from tasknest.affected import AffectedContext
 from tasknest.errors import ToolError
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
+    from threading import Event
 
 OutputFormat = Literal["json", "pickle"]
 
@@ -98,6 +100,9 @@ class _SubprocessSpec:
     timeout: float | None
     check: bool
     capture: bool
+    cancel_event: Event | None = None
+    line_prefix: str | None = None
+    quiet_stdout: bool = False
 
 
 def _build_env(
@@ -115,28 +120,52 @@ def _build_env(
 
 
 def _execute_spec(spec: _SubprocessSpec) -> CommandResult:
-    try:
-        proc = subprocess.run(  # noqa: S603 - explicit argv list with shell=False
-            spec.args,
-            cwd=spec.workdir,
-            env=spec.env,
-            shell=False,
-            timeout=spec.timeout,
-            text=True,
-            capture_output=spec.capture,
-            check=False,
+    if spec.cancel_event is not None or spec.line_prefix is not None:
+        code, stdout_text, stderr_text = run_streaming_process(
+            ProcessSpec(
+                args=spec.args,
+                workdir=spec.workdir,
+                env=spec.env,
+                timeout=spec.timeout,
+                check=spec.check,
+                capture=spec.capture,
+                cancel_event=spec.cancel_event,
+                line_prefix=spec.line_prefix,
+                quiet_stdout=spec.quiet_stdout,
+            )
         )
-    except subprocess.TimeoutExpired as exc:
-        raise ToolError(f"Command timed out after {spec.timeout}s: {' '.join(spec.args)}") from exc
-    except OSError as exc:
-        raise ToolError(f"Failed to execute command {spec.args[0]!r}: {exc}") from exc
-    result = CommandResult(
-        argv=spec.args,
-        returncode=proc.returncode,
-        stdout=proc.stdout or "",
-        stderr=proc.stderr or "",
-        cwd=spec.workdir,
-    )
+        result = CommandResult(
+            argv=spec.args,
+            returncode=code,
+            stdout=stdout_text,
+            stderr=stderr_text,
+            cwd=spec.workdir,
+        )
+    else:
+        try:
+            proc = subprocess.run(  # noqa: S603 - explicit argv list with shell=False
+                spec.args,
+                cwd=spec.workdir,
+                env=spec.env,
+                shell=False,
+                timeout=spec.timeout,
+                text=True,
+                capture_output=spec.capture,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise ToolError(
+                f"Command timed out after {spec.timeout}s: {' '.join(spec.args)}"
+            ) from exc
+        except OSError as exc:
+            raise ToolError(f"Failed to execute command {spec.args[0]!r}: {exc}") from exc
+        result = CommandResult(
+            argv=spec.args,
+            returncode=proc.returncode,
+            stdout=proc.stdout or "",
+            stderr=proc.stderr or "",
+            cwd=spec.workdir,
+        )
     if spec.check and result.returncode != 0:
         raise ToolError(
             f"Command exited with code {result.returncode}: {' '.join(spec.args)}",
@@ -188,7 +217,15 @@ class ToolContext:
     deps: DepsMapping = field(default_factory=lambda: DepsMapping("", frozenset(), {}))
     affected: AffectedContext = field(default_factory=AffectedContext)
     quiet_stdout: bool = False
+    cancel_event: Event | None = None
+    line_prefix: str | None = None
     _task_env: dict[str, str] = field(init=False, repr=False)
+
+    @property
+    def is_cancelled(self) -> bool:
+        """Return True when the current execution has been cancelled."""
+        return self.cancel_event is not None and self.cancel_event.is_set()
+
     _unset_env: set[str] = field(init=False, repr=False, default_factory=set)
     _accessed_env: set[str] = field(init=False, repr=False, default_factory=set)
     _pending_output: BufferedOutput | None = field(init=False, repr=False, default=None)
@@ -292,6 +329,9 @@ class ToolContext:
             timeout=timeout,
             check=check,
             capture=capture or self.quiet_stdout,
+            cancel_event=self.cancel_event,
+            line_prefix=self.line_prefix,
+            quiet_stdout=self.quiet_stdout,
         )
         try:
             result = _execute_spec(spec)

@@ -27,3 +27,6 @@ tasknest = "tasknest.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/tasknest"]
+
+[tool.tasknest.tasks]
+test = { cmd = ["pytest", "-o", "pythonpath=packages/tasknest-py/src", "tests"], marks = ["fast"], description = "Run the Python runner test suite." }

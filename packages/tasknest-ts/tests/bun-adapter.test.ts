@@ -45,3 +45,33 @@ test.prop(
   },
   { numRuns: 20 },
 );
+
+test("Bun adapter spawnAsync streams lines and cancels cleanly via AbortSignal", async ({
+  workspace,
+}) => {
+  const adapter = createBunAdapter();
+  const spawnAsync = adapter.spawnAsync;
+  expect(spawnAsync).toBeDefined();
+  const lines: string[] = [];
+  const controller = new AbortController();
+  const res = await spawnAsync?.(
+    [
+      process.execPath,
+      "-e",
+      'console.log("BUN_1"); setTimeout(() => console.log("BUN_2"), 10000);',
+    ],
+    {
+      cwd: (workspace as { root: string }).root,
+      signal: controller.signal,
+      onStdoutLine: (line) => {
+        lines.push(line.trim());
+        if (line.includes("BUN_1")) {
+          controller.abort();
+        }
+      },
+    },
+  );
+  expect(res?.cancelled).toBe(true);
+  expect(lines).toContain("BUN_1");
+  expect(lines).not.toContain("BUN_2");
+});

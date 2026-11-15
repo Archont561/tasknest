@@ -61,6 +61,9 @@ export interface ToolContextOptions {
   readonly env?: Readonly<Record<string, string | undefined>>;
   readonly affected?: AffectedContext;
   readonly quietStdout?: boolean;
+  readonly signal?: AbortSignal;
+  readonly prefixOutput?: boolean;
+  readonly stdoutWriter?: (chunk: string) => void;
   readonly stderrWriter?: (chunk: string) => void;
 }
 
@@ -189,8 +192,12 @@ export class ToolContext {
   readonly verbose: boolean;
   readonly deps: Readonly<Record<string, unknown>>;
   readonly affected: AffectedContext;
+  readonly signal: AbortSignal;
   private readonly adapter: RuntimeAdapter;
   private readonly quietStdout: boolean;
+  private readonly customWriters: boolean;
+  private readonly prefixOutput: boolean;
+  private readonly stdoutWriter: (chunk: string) => void;
   private readonly stderrWriter: (chunk: string) => void;
   private readonly envState: Map<string, string>;
   private readonly accessedEnv = new Set<string>();
@@ -204,7 +211,11 @@ export class ToolContext {
     this.verbose = options.verbose ?? false;
     this.adapter = options.adapter ?? createRuntimeAdapter();
     this.quietStdout = options.quietStdout ?? false;
+    this.customWriters = options.stdoutWriter !== undefined || options.stderrWriter !== undefined;
+    this.prefixOutput = options.prefixOutput ?? false;
+    this.stdoutWriter = options.stdoutWriter ?? ((chunk) => process.stdout.write(chunk));
     this.stderrWriter = options.stderrWriter ?? ((chunk) => process.stderr.write(chunk));
+    this.signal = options.signal ?? new AbortController().signal;
     this.affected = options.affected ?? new AffectedContext();
     this.deps = createDepsProxy(
       this.taskName,
@@ -325,7 +336,7 @@ export class ToolContext {
     }
 
     const captureRequested = options.capture ?? false;
-    const shouldCapture = captureRequested || this.quietStdout;
+    const shouldCapture = captureRequested || this.quietStdout || this.customWriters;
     const spawnOptions: SpawnOptions = {
       cwd: workdir,
       capture: shouldCapture,
@@ -336,6 +347,99 @@ export class ToolContext {
     };
 
     const raw = this.adapter.spawn(argv, spawnOptions);
+    if (!captureRequested && (this.quietStdout || this.customWriters)) {
+      if (this.quietStdout) {
+        if (raw.stdout) {
+          this.stderrWriter(raw.stdout);
+        }
+        if (raw.stderr) {
+          this.stderrWriter(raw.stderr);
+        }
+      } else {
+        if (raw.stdout) {
+          this.stdoutWriter(raw.stdout);
+        }
+        if (raw.stderr) {
+          this.stderrWriter(raw.stderr);
+        }
+      }
+    }
+    if (raw.timedOut) {
+      throw new ToolError(
+        `Command timed out after ${options.timeoutSeconds ?? "?"}s: ${argv.join(" ")}`,
+      );
+    }
+    if (raw.spawnError) {
+      throw new ToolError(`Executable not found or failed to start: ${argv[0]}`);
+    }
+
+    const result = new CommandResult({
+      argv: [...argv],
+      exitCode: raw.exitCode,
+      stdout: raw.stdout,
+      stderr: raw.stderr,
+    });
+    this.commands.push({ argv: [...argv], exitCode: result.exitCode, cwd: workdir });
+    if ((options.check ?? true) && result.exitCode !== 0) {
+      throw new ToolError(
+        `Command failed with exit code ${result.exitCode}: ${argv.join(" ")}`,
+        result.exitCode,
+      );
+    }
+    return result;
+  }
+
+  async spawn(argv: readonly string[], options: RunOptions = {}): Promise<CommandResult> {
+    if (
+      !Array.isArray(argv) ||
+      argv.length === 0 ||
+      argv.some((part) => typeof part !== "string")
+    ) {
+      throw new ToolError("ctx.spawn requires an explicit argv array of strings (shell=false).");
+    }
+
+    const workdir =
+      options.cwd === undefined
+        ? this.projectRoot
+        : isAbsolute(options.cwd)
+          ? options.cwd
+          : resolve(this.projectRoot, options.cwd);
+
+    const mergedEnv: Record<string, string> = { ...this.envSnapshot() };
+    if (options.env !== undefined) {
+      for (const [k, v] of Object.entries(options.env)) {
+        this.accessedEnv.add(k);
+        mergedEnv[k] = v;
+      }
+    }
+
+    const captureRequested = options.capture ?? false;
+    const shouldCapture = captureRequested || this.quietStdout;
+    const prefix = this.prefixOutput && !captureRequested ? `[${this.taskName}] ` : "";
+    const writeLine = (target: (chunk: string) => void, line: string): void => {
+      target(prefix ? `${prefix}${line}` : line);
+    };
+
+    const spawnOptions: SpawnOptions = {
+      cwd: workdir,
+      capture: shouldCapture,
+      env: mergedEnv,
+      signal: this.signal,
+      ...(this.prefixOutput && !shouldCapture
+        ? {
+            onStdoutLine: (line: string) => writeLine(this.stdoutWriter, line),
+            onStderrLine: (line: string) => writeLine(this.stderrWriter, line),
+          }
+        : {}),
+      ...(options.timeoutSeconds !== undefined
+        ? { timeoutMs: Math.max(1, Math.round(options.timeoutSeconds * 1000)) }
+        : {}),
+    };
+
+    const raw = this.adapter.spawnAsync
+      ? await this.adapter.spawnAsync(argv, spawnOptions)
+      : this.adapter.spawn(argv, spawnOptions);
+
     if (this.quietStdout && !captureRequested) {
       if (raw.stdout) {
         this.stderrWriter(raw.stdout);
@@ -343,6 +447,9 @@ export class ToolContext {
       if (raw.stderr) {
         this.stderrWriter(raw.stderr);
       }
+    }
+    if (raw.cancelled || this.signal.aborted) {
+      throw new ToolError(`Command cancelled: ${argv.join(" ")}`, 130);
     }
     if (raw.timedOut) {
       throw new ToolError(

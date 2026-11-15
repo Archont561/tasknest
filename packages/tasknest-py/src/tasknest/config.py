@@ -18,6 +18,8 @@ _DOT = "."
 _CHECKS_SECTION = "checks"
 _IGNORE_MODE = "ignore"
 _VALID_MARK_MODES = frozenset({_IGNORE_MODE, "warn", "error"})
+_VALID_RUNNERS = frozenset({"auto", "bun", "npm", "pnpm", "yarn"})
+RunnerKind = Literal["auto", "bun", "npm", "pnpm", "yarn"]
 
 
 @dataclass(frozen=True)
@@ -50,12 +52,25 @@ class DiscoveryRoot:
 
 
 @dataclass(frozen=True)
+class ManifestRoot:
+    """One configured manifest discovery entry (package.json / pyproject.toml)."""
+
+    path: str
+    namespace: str = ""
+    runner: RunnerKind = "auto"
+    persistent_scripts: tuple[str, ...] = ()
+    exclude_scripts: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class TasknestConfig:
     """Parsed Tasknest workspace configuration."""
 
     repo_root: Path
     roots: tuple[DiscoveryRoot, ...]
     marks: dict[str, str]
+    manifests: tuple[ManifestRoot, ...] = ()
+    workspaces: bool = False
     jobs: int = 1
     checks: ChecksConfig = field(default_factory=ChecksConfig)
     skill: SkillConfig = field(default_factory=SkillConfig)
@@ -98,10 +113,57 @@ def _extract_roots(raw: dict[str, Any]) -> tuple[DiscoveryRoot, ...]:
         raise ConfigError("[discovery] must be a table.")
     raw_roots = discovery.get("roots")
     if raw_roots is None:
+        if discovery.get("manifests") is not None or discovery.get("workspaces"):
+            return ()
         return (DiscoveryRoot(path=Path("tools")),)
     if not isinstance(raw_roots, list):
         raise ConfigError("[[discovery.roots]] must be an array of tables.")
     return tuple(_parse_root(item) for item in raw_roots)
+
+
+def _require_str_seq(entry: dict[str, Any], key: str) -> tuple[str, ...]:
+    raw = entry.get(key)
+    if raw is None:
+        return ()
+    if not isinstance(raw, list) or any(type(item) is not str or not item for item in raw):
+        raise ConfigError(f"[[discovery.manifests]] field '{key}' must be a list of strings.")
+    return tuple(raw)
+
+
+def _parse_manifest(entry: object) -> ManifestRoot:
+    if not isinstance(entry, dict) or "path" not in entry:
+        raise ConfigError("Each [[discovery.manifests]] entry must be a table with a 'path'.")
+    raw_path = entry.get("path")
+    raw_ns = entry.get("namespace", "")
+    runner = entry.get("runner", "auto")
+    if type(raw_path) is not str or not raw_path:
+        raise ConfigError("[[discovery.manifests]] field 'path' must be a non-empty string.")
+    if type(raw_ns) is not str:
+        raise ConfigError("[[discovery.manifests]] field 'namespace' must be a string.")
+    if runner not in _VALID_RUNNERS:
+        raise ConfigError(f"[[discovery.manifests]] invalid runner {runner!r}.")
+    return ManifestRoot(
+        path=raw_path,
+        namespace=raw_ns.strip(_DOT),
+        runner=runner,
+        persistent_scripts=_require_str_seq(entry, "persistent_scripts"),
+        exclude_scripts=_require_str_seq(entry, "exclude_scripts"),
+    )
+
+
+def _extract_manifests(raw: dict[str, Any]) -> tuple[tuple[ManifestRoot, ...], bool]:
+    discovery = raw.get("discovery", {})
+    if not isinstance(discovery, dict):
+        raise ConfigError("[discovery] must be a table.")
+    workspaces = discovery.get("workspaces", False)
+    if type(workspaces) is not bool:
+        raise ConfigError("[discovery].workspaces must be a boolean.")
+    raw_manifests = discovery.get("manifests")
+    if raw_manifests is None:
+        return (), workspaces
+    if not isinstance(raw_manifests, list):
+        raise ConfigError("[[discovery.manifests]] must be an array of tables.")
+    return tuple(_parse_manifest(item) for item in raw_manifests), workspaces
 
 
 def _resolve_config_target(resolved_root: Path, config_path: Path | None) -> Path | None:
@@ -177,10 +239,13 @@ def load_config(repo_root: Path, config_path: Path | None = None) -> TasknestCon
         raw = tomllib.loads(target.read_text(encoding="utf-8"))
     except (tomllib.TOMLDecodeError, ValueError) as exc:
         raise ConfigError(f"Invalid TOML in {target}: {exc}") from exc
+    manifests, workspaces = _extract_manifests(raw)
     return TasknestConfig(
         repo_root=resolved_root,
         roots=_extract_roots(raw),
         marks=_parse_marks(raw.get("marks")),
+        manifests=manifests,
+        workspaces=workspaces,
         jobs=_extract_jobs(raw),
         checks=_parse_checks(raw.get("checks")),
         skill=_parse_skill(raw.get("skill")),

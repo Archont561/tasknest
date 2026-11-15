@@ -64,6 +64,7 @@ def _render_python_task(task: dict[str, Any]) -> str:
         f"    inputs={task.get('inputs', [])!r},",
         f"    outputs={task.get('outputs', [])!r},",
         f"    cache={bool(task.get('cache', False))!r},",
+        f"    persistent={bool(task.get('persistent', False))!r},",
         f"    description={task.get('description', '')!r},",
         ")",
     ]

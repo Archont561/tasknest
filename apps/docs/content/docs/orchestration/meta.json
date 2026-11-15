@@ -5,6 +5,7 @@
     "data-passing",
     "caching",
     "parallelism",
+    "persistent",
     "affected",
     "watch",
     "reports"

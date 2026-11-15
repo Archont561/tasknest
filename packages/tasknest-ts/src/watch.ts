@@ -4,6 +4,7 @@ import { dirname, join, relative } from "node:path";
 import { createRuntimeAdapter, type RuntimeAdapter, type WatchHandle } from "@/src/adapter";
 import { expandInputHashes } from "@/src/cache";
 import type { TaskRegistry } from "@/src/discovery";
+import { ValidationError } from "@/src/errors";
 import { type ExecutionReport, executeOrder, resolvePlan, validateGraph } from "@/src/graph";
 
 export interface WatchConfig {
@@ -205,6 +206,13 @@ export class WatchSession {
     this.adapter = adapter ?? createRuntimeAdapter();
     this.adjacency = validateGraph(registry);
     this.order = resolvePlan(registry, target);
+    for (const name of this.order) {
+      if (registry.tasks[name]?.definition.persistent) {
+        throw new ValidationError(
+          `Cannot use 'watch' on persistent task '${name}'; run it directly instead.`,
+        );
+      }
+    }
     this.snapshot = scanSnapshot(registry.config.repoRoot, registry, this.order);
   }
 

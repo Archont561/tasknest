@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 import { createRuntimeAdapter, type RuntimeAdapter } from "@/src/adapter";
 import { type DiscoveryRoot, loadConfig, type TasknestConfig } from "@/src/config";
 import { DiscoveryError } from "@/src/errors";
+import { discoverManifestTasks } from "@/src/manifests";
 import { collectTaskRegistrations, isTaskDefinition, type TaskDefinition } from "@/src/task";
 
 const RESERVED_TOP_DIRS = new Set(["tests", "features"]);
@@ -36,6 +37,8 @@ export interface DiscoveredTask {
   readonly rootDir: string;
   readonly projectRoot: string;
   readonly description: string;
+  readonly packageName?: string;
+  readonly isManifest?: boolean;
 }
 
 export interface TaskRegistry {
@@ -164,6 +167,7 @@ export async function discoverTasks(
     adapter,
   });
   const tasks: Record<string, DiscoveredTask> = {};
+  discoverManifestTasks(config, tasks, adapter);
 
   for (const rootEntry of config.roots) {
     await registerRootTasks(config.repoRoot, rootEntry, tasks);
@@ -181,12 +185,14 @@ async function registerRootTasks(
   for (const filePath of collectTaskFiles(rootDir)) {
     const segments = deriveSegments(rootDir, filePath, rootEntry.namespace);
     const canonicalName = segments.join(".");
-    if (canonicalName in tasks) {
+    const existing = tasks[canonicalName];
+    if (existing !== undefined && !existing.isManifest) {
       throw new DiscoveryError(
-        `Duplicate task name '${canonicalName}' from ${filePath} (already registered by ${tasks[canonicalName]?.sourcePath}).`,
+        `Duplicate task name '${canonicalName}' from ${filePath} (already registered by ${existing.sourcePath}).`,
       );
     }
     const definition = await loadSingleTaskFromFile(filePath);
+    const pkgName = existing?.packageName ?? (rootEntry.namespace || undefined);
     tasks[canonicalName] = {
       canonicalName,
       cliPath: segments,
@@ -195,6 +201,8 @@ async function registerRootTasks(
       rootDir,
       projectRoot,
       description: definition.description,
+      ...(pkgName !== undefined ? { packageName: pkgName } : {}),
+      isManifest: false,
     };
   }
 }

@@ -1,6 +1,7 @@
 /** Tasknest native TypeScript task runner. */
 
 export {
+  createLineDispatcher,
   createRuntimeAdapter,
   isBunRuntime,
   type RuntimeAdapter,
@@ -52,6 +53,7 @@ export {
   type DiscoveryRoot,
   type LoadConfigOptions,
   loadConfig,
+  type ManifestRoot,
   type SkillConfig,
   type TasknestConfig,
   type UnknownMarkMode,
@@ -92,6 +94,7 @@ export {
   resolvePlan,
   validateGraph,
 } from "@/src/graph";
+export { discoverManifestTasks } from "@/src/manifests";
 export { createNodeAdapter } from "@/src/node-adapter";
 export {
   buildJsonReport,
@@ -135,7 +138,9 @@ export {
 } from "@/src/testing";
 export {
   formatEffectSummary,
+  matchesPackage,
   selectTasksByMarks,
+  selectTasksEach,
   type ValidationResult,
   validateRegistry,
 } from "@/src/validation";

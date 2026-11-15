@@ -58,6 +58,8 @@ def _check_marks_for_task(
 
 
 def _check_task_files(task: TaskDefinition, registry: TaskRegistry) -> None:
+    if task.is_manifest:
+        return
     checks = registry.config.checks
     root_dir = task.root_dir
     if root_dir is None:
@@ -83,6 +85,8 @@ def validate_registry(registry: TaskRegistry) -> ValidationResult:
     for task in registry.ordered_tasks():
         if checks.require_description and not task.description.strip():
             raise ValidationError(f"Task {task.name!r} is missing a required description.")
+        if task.persistent and task.cache:
+            raise ValidationError(f"Persistent task {task.name!r} cannot enable cache.")
         _check_marks_for_task(task, registry, warnings)
         _check_task_files(task, registry)
     return ValidationResult(warnings=tuple(warnings))
@@ -94,8 +98,21 @@ def _matches_marks(task: TaskDefinition, marks: Sequence[str], *, match_all: boo
     return any(m in task.marks for m in marks)
 
 
+def matches_package(task: TaskDefinition, packages: Sequence[str]) -> bool:
+    """Return True when a task belongs to any package in packages."""
+    if not packages:
+        return True
+    if task.package_name and task.package_name in packages:
+        return True
+    return any(task.name.startswith(f"{pkg}.") for pkg in packages)
+
+
 def select_tasks_by_marks(
-    registry: TaskRegistry, marks: Sequence[str], *, match_all: bool = False
+    registry: TaskRegistry,
+    marks: Sequence[str],
+    *,
+    match_all: bool = False,
+    packages: Sequence[str] = (),
 ) -> tuple[str, ...]:
     """Return ordered task names matching marks together with prerequisites."""
     if not marks:
@@ -104,10 +121,38 @@ def select_tasks_by_marks(
     targets = [
         task.name
         for task in registry.ordered_tasks()
-        if _matches_marks(task, marks, match_all=match_all)
+        if _matches_marks(task, marks, match_all=match_all) and matches_package(task, packages)
     ]
     if not targets:
         raise ValidationError(f"No tasks matched mark(s): {', '.join(marks)}.")
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for target in targets:
+        for name in _collect_order(deps_map, target):
+            if name not in seen:
+                seen.add(name)
+                ordered.append(name)
+    return tuple(ordered)
+
+
+def select_tasks_each(
+    registry: TaskRegistry,
+    task_leaf: str,
+    *,
+    packages: Sequence[str] = (),
+) -> tuple[str, ...]:
+    """Select `<pkg>.<task_leaf>` tasks across packages together with prerequisites."""
+    if not task_leaf:
+        raise ValidationError("--each requires a task name.")
+    deps_map = validate_graph(registry)
+    suffix = f".{task_leaf}"
+    targets = [
+        task.name
+        for task in registry.ordered_tasks()
+        if task.name.endswith(suffix) and matches_package(task, packages)
+    ]
+    if not targets:
+        raise ValidationError(f"No tasks matched --each {task_leaf!r}.")
     ordered: list[str] = []
     seen: set[str] = set()
     for target in targets:
@@ -128,6 +173,8 @@ def format_effect_summary(registry: TaskRegistry, task_names: Sequence[str]) -> 
             parts.append(f"marks={','.join(task.marks)}")
         if task.requires:
             parts.append(f"requires={','.join(task.requires)}")
+        if task.persistent:
+            parts.append("persistent=true")
         if parts:
             lines.append(f"{name}: {'; '.join(parts)}")
     return lines

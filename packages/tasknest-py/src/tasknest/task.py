@@ -67,8 +67,11 @@ class TaskDefinition:
     inputs: tuple[str, ...] = field(default=(), compare=False)
     outputs: tuple[str, ...] = field(default=(), compare=False)
     cache: bool = field(default=False, compare=False)
+    persistent: bool = field(default=False, compare=False)
     env: tuple[str, ...] = field(default=(), compare=False)
     resources: tuple[str, ...] = field(default=(), compare=False)
+    package_name: str | None = field(default=None, compare=False)
+    is_manifest: bool = field(default=False, compare=False)
     source_path: Path | None = field(default=None, compare=False)
     root_dir: Path | None = field(default=None, compare=False)
     project_root: Path | None = field(default=None, compare=False)
@@ -229,6 +232,7 @@ def tool(
     inputs: tuple[str, ...] | list[str] = (),
     outputs: tuple[str, ...] | list[str] = (),
     cache: bool = False,
+    persistent: bool = False,
     env: tuple[str, ...] | list[str] = (),
     resources: tuple[str, ...] | list[str] = (),
 ) -> Callable[[Callable[..., Any]], TaskDefinition]:
@@ -239,7 +243,11 @@ def tool(
             raise ValidationError("@tool must decorate a callable function.")
         if type(cache) is not bool:
             raise ValidationError("cache parameter for @tool must be a bool.")
+        if type(persistent) is not bool:
+            raise ValidationError("persistent parameter for @tool must be a bool.")
         task_name = name if name is not None else str(getattr(target_fn, "__name__", "task"))
+        if persistent and cache:
+            raise ValidationError(f"Persistent task {task_name!r} cannot enable cache.")
         takes_context, options = inspect_task_signature(target_fn, task_name)
         return TaskDefinition(
             callable_fn=target_fn,
@@ -253,6 +261,7 @@ def tool(
             inputs=_validate_str_tuple(inputs, "inputs", task_name),
             outputs=_validate_str_tuple(outputs, "outputs", task_name),
             cache=cache,
+            persistent=persistent,
             env=_validate_str_tuple(env, "env", task_name),
             resources=_validate_str_tuple(resources, "resources", task_name),
         )

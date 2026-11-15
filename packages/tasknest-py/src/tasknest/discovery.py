@@ -6,6 +6,7 @@ import importlib.util
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from tasknest._manifests import discover_manifest_tasks
 from tasknest.config import DiscoveryRoot, TasknestConfig, load_config
 from tasknest.errors import DiscoveryError
 from tasknest.task import TaskDefinition
@@ -96,10 +97,15 @@ def _discover_root(
         rel = file_path.relative_to(root_dir).with_suffix("")
         parts = ns_parts + rel.parts
         canonical = _DOT.join(parts)
-        if canonical in tasks:
+        existing = tasks.get(canonical)
+        if existing is not None and not existing.is_manifest:
             raise DiscoveryError(f"Duplicate task name {canonical!r} found at {file_path}.")
         loaded = _load_file_task(file_path, canonical, parts, proj_root)
         loaded.root_dir = root_dir
+        if existing is not None and loaded.package_name is None:
+            loaded.package_name = existing.package_name
+        elif loaded.package_name is None and ns_parts:
+            loaded.package_name = _DOT.join(ns_parts)
         tasks[canonical] = loaded
 
 
@@ -107,6 +113,7 @@ def discover_tasks(repo_root: Path, config_path: Path | None = None) -> TaskRegi
     """Load configuration and discover all tasks from configured roots."""
     config = load_config(repo_root, config_path=config_path)
     tasks: dict[str, TaskDefinition] = {}
+    discover_manifest_tasks(config, tasks)
     for entry in config.roots:
         _discover_root(config, entry, tasks)
     return TaskRegistry(config=config, tasks=tasks)

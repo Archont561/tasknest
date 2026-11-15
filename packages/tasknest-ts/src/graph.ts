@@ -4,7 +4,7 @@ import type { AffectedContext } from "@/src/affected";
 import { type CacheContext, type CacheMode, lookupCache, storeCache } from "@/src/cache";
 import { ToolContext } from "@/src/context";
 import type { TaskRegistry } from "@/src/discovery";
-import { DependencyError, TasknestError } from "@/src/errors";
+import { DependencyError, TasknestError, ValidationError } from "@/src/errors";
 import type { TaskRunRecord } from "@/src/report";
 import { createDefaultArgValues, isTaskDefinition, type TaskDefinition } from "@/src/task";
 
@@ -19,6 +19,7 @@ export interface ExecutionReport {
   readonly outputs: Readonly<Record<string, unknown>>;
   readonly outputHashes: Readonly<Record<string, string>>;
   readonly cacheHits: readonly string[];
+  readonly jobs?: number;
 }
 
 export interface ExecutePlanOptions {
@@ -27,6 +28,7 @@ export interface ExecutePlanOptions {
   readonly verbose?: boolean;
   readonly adapter?: RuntimeAdapter;
   readonly jobs?: number;
+  readonly explicitJobs?: boolean;
   readonly failFast?: boolean;
   readonly cacheMode?: CacheMode;
   readonly affected?: AffectedContext;
@@ -34,6 +36,8 @@ export interface ExecutePlanOptions {
   readonly env?: Readonly<Record<string, string | undefined>>;
   readonly seedOutputs?: Readonly<Record<string, unknown>>;
   readonly seedOutputHashes?: Readonly<Record<string, string>>;
+  readonly signal?: AbortSignal;
+  readonly stdoutWriter?: (chunk: string) => void;
   readonly stderrWriter?: (chunk: string) => void;
 }
 
@@ -113,6 +117,13 @@ export function validateGraph(registry: TaskRegistry): Map<string, string[]> {
       dfs(name);
     }
   }
+  for (const [name, deps] of adjacency.entries()) {
+    for (const dep of deps) {
+      if (registry.tasks[dep]?.definition.persistent) {
+        throw new DependencyError(`Task '${name}' cannot depend on persistent task '${dep}'.`);
+      }
+    }
+  }
   return adjacency;
 }
 
@@ -144,6 +155,8 @@ interface ExecState {
   readonly target: string | undefined;
   readonly adjacency: Map<string, string[]>;
   readonly baseEnv: Record<string, string | undefined>;
+  readonly controller: AbortController;
+  readonly hasPersistent: boolean;
   readonly outputs: Record<string, unknown>;
   readonly outputHashes: Record<string, string>;
   readonly succeeded: Set<string>;
@@ -246,6 +259,11 @@ async function runSingleTask(state: ExecState, name: string): Promise<void> {
     env: state.baseEnv,
     ...(state.options.affected !== undefined ? { affected: state.options.affected } : {}),
     quietStdout: state.options.quietStdout ?? false,
+    signal: state.controller.signal,
+    prefixOutput: state.hasPersistent && !(state.options.quietStdout ?? false),
+    ...(state.options.stdoutWriter !== undefined
+      ? { stdoutWriter: state.options.stdoutWriter }
+      : {}),
     ...(state.options.stderrWriter !== undefined
       ? { stderrWriter: state.options.stderrWriter }
       : {}),
@@ -280,11 +298,27 @@ async function runSingleTask(state: ExecState, name: string): Promise<void> {
     const durationMs = performance.now() - started;
     const failureMessage = err instanceof Error ? err.message : String(err);
     const exitCode = err instanceof TasknestError ? err.exitCode : 1;
+    if (state.controller.signal.aborted) {
+      state.cancelled.push(name);
+      state.recordByName.set(name, {
+        name,
+        status: "cancelled",
+        cacheStatus: lookup.status,
+        cacheReason: lookup.reason,
+        durationMs,
+        commands: ctx.recordedCommands(),
+        error: failureMessage,
+      });
+      return;
+    }
     state.failed.add(name);
     if (state.failedTask === undefined) {
       state.failedTask = name;
       state.failureMessage = failureMessage;
       state.exitCode = exitCode;
+    }
+    if (state.hasPersistent || (state.options.failFast ?? false)) {
+      state.controller.abort();
     }
     state.recordByName.set(name, {
       name,
@@ -315,18 +349,51 @@ function drainUnstarted(state: ExecState, pending: Set<string>): boolean {
         error: "blocked by upstream failure",
       });
       progressed = true;
-    } else if ((state.options.failFast ?? false) && state.failed.size > 0) {
+    } else if (
+      state.controller.signal.aborted ||
+      ((state.options.failFast ?? false) && state.failed.size > 0)
+    ) {
       pending.delete(name);
       state.cancelled.push(name);
       state.recordByName.set(name, {
         name,
         status: "cancelled",
-        error: "cancelled by --fail-fast",
+        error: "cancelled",
       });
       progressed = true;
     }
   }
   return progressed;
+}
+
+function resolveEffectiveWorkerBudget(
+  options: ExecutePlanOptions,
+  persistentCount: number,
+  baseEnv: Record<string, string | undefined>,
+): number {
+  const baseBudget = computeWorkerBudget(options.jobs ?? 1, baseEnv);
+  if (persistentCount <= 0) {
+    return baseBudget;
+  }
+  if (
+    (options.explicitJobs ?? false) &&
+    options.jobs !== undefined &&
+    options.jobs < persistentCount
+  ) {
+    throw new ValidationError(
+      `Cannot run ${persistentCount} persistent tasks concurrently with --jobs ${options.jobs}; increase --jobs to at least ${persistentCount}.`,
+    );
+  }
+  const rawEnvBudget = baseEnv.TASKNEST_WORKER_BUDGET;
+  if (rawEnvBudget !== undefined && /^\d+$/.test(rawEnvBudget.trim())) {
+    const parsed = Number.parseInt(rawEnvBudget.trim(), 10);
+    if (parsed >= 1 && parsed < persistentCount) {
+      throw new ValidationError(
+        `Cannot run ${persistentCount} persistent tasks concurrently with TASKNEST_WORKER_BUDGET=${parsed}.`,
+      );
+    }
+  }
+  return Math.max(baseBudget, persistentCount);
 }
 
 export async function executeOrder(
@@ -338,7 +405,32 @@ export async function executeOrder(
   const adjacency = validateGraph(registry);
   const envSource = options.env ?? process.env;
   const baseEnv: Record<string, string | undefined> = { ...envSource };
-  const workerBudget = computeWorkerBudget(options.jobs ?? 1, baseEnv);
+  const persistentCount = order.filter(
+    (name) => registry.tasks[name]?.definition.persistent,
+  ).length;
+  const workerBudget = resolveEffectiveWorkerBudget(options, persistentCount, baseEnv);
+  const controller = new AbortController();
+  if (options.signal) {
+    if (options.signal.aborted) {
+      controller.abort();
+    } else {
+      options.signal.addEventListener("abort", () => controller.abort(), { once: true });
+    }
+  }
+
+  let signalExitCode: number | undefined;
+  const onSigInt = (): void => {
+    signalExitCode ??= 130;
+    controller.abort();
+  };
+  const onSigTerm = (): void => {
+    signalExitCode ??= 143;
+    controller.abort();
+  };
+  if (persistentCount > 0) {
+    process.on("SIGINT", onSigInt);
+    process.on("SIGTERM", onSigTerm);
+  }
 
   const state: ExecState = {
     registry,
@@ -346,6 +438,8 @@ export async function executeOrder(
     target,
     adjacency,
     baseEnv,
+    controller,
+    hasPersistent: persistentCount > 0,
     outputs: { ...(options.seedOutputs ?? {}) },
     outputHashes: { ...(options.seedOutputHashes ?? {}) },
     succeeded: new Set<string>(Object.keys(options.seedOutputs ?? {})),
@@ -367,56 +461,66 @@ export async function executeOrder(
   const taskResources = (name: string): readonly string[] =>
     registry.tasks[name]?.definition.resources ?? [];
 
-  while (pending.size > 0 || running.size > 0) {
-    while (drainUnstarted(state, pending)) {
-      // keep draining transitive downstream blocks
-    }
-
-    const ready = [...pending].filter((name) => {
-      const deps = adjacency.get(name) ?? [];
-      if (!deps.every((dep) => state.succeeded.has(dep))) {
-        return false;
+  try {
+    while (pending.size > 0 || running.size > 0) {
+      while (drainUnstarted(state, pending)) {
+        // keep draining transitive downstream blocks
       }
-      const res = taskResources(name);
-      return !res.some((r) => activeResources.has(r));
-    });
 
-    while (running.size < workerBudget && ready.length > 0) {
-      if ((options.failFast ?? false) && state.failed.size > 0) {
+      const ready = [...pending].filter((name) => {
+        const deps = adjacency.get(name) ?? [];
+        if (!deps.every((dep) => state.succeeded.has(dep))) {
+          return false;
+        }
+        const res = taskResources(name);
+        return !res.some((r) => activeResources.has(r));
+      });
+
+      while (running.size < workerBudget && ready.length > 0) {
+        if (
+          state.controller.signal.aborted ||
+          ((options.failFast ?? false) && state.failed.size > 0)
+        ) {
+          break;
+        }
+        const next = ready.shift() as string;
+        const res = taskResources(next);
+        if (res.some((r) => activeResources.has(r))) {
+          continue;
+        }
+        pending.delete(next);
+        for (const r of res) {
+          activeResources.add(r);
+        }
+        const promise = runSingleTask(state, next).then(() => next);
+        running.set(next, promise);
+      }
+
+      if (running.size === 0) {
+        if (pending.size > 0) {
+          for (const leftover of [...pending]) {
+            pending.delete(leftover);
+            state.blocked.push(leftover);
+            state.recordByName.set(leftover, {
+              name: leftover,
+              status: "blocked",
+              error: "blocked by unresolvable upstream state",
+            });
+          }
+        }
         break;
       }
-      const next = ready.shift() as string;
-      const res = taskResources(next);
-      if (res.some((r) => activeResources.has(r))) {
-        continue;
-      }
-      pending.delete(next);
-      for (const r of res) {
-        activeResources.add(r);
-      }
-      const promise = runSingleTask(state, next).then(() => next);
-      running.set(next, promise);
-    }
 
-    if (running.size === 0) {
-      if (pending.size > 0) {
-        for (const leftover of [...pending]) {
-          pending.delete(leftover);
-          state.blocked.push(leftover);
-          state.recordByName.set(leftover, {
-            name: leftover,
-            status: "blocked",
-            error: "blocked by unresolvable upstream state",
-          });
-        }
+      const completedName = await Promise.race(running.values());
+      running.delete(completedName);
+      for (const r of taskResources(completedName)) {
+        activeResources.delete(r);
       }
-      break;
     }
-
-    const completedName = await Promise.race(running.values());
-    running.delete(completedName);
-    for (const r of taskResources(completedName)) {
-      activeResources.delete(r);
+  } finally {
+    if (persistentCount > 0) {
+      process.off("SIGINT", onSigInt);
+      process.off("SIGTERM", onSigTerm);
     }
   }
 
@@ -425,7 +529,7 @@ export async function executeOrder(
     .filter((rec): rec is TaskRunRecord => rec !== undefined);
 
   return {
-    exitCode: state.exitCode,
+    exitCode: state.exitCode !== 0 ? state.exitCode : (signalExitCode ?? 0),
     executed: state.executed,
     blocked: state.blocked,
     cancelled: state.cancelled,
@@ -435,6 +539,7 @@ export async function executeOrder(
     outputs: state.outputs,
     outputHashes: state.outputHashes,
     cacheHits: state.cacheHits,
+    jobs: workerBudget,
   };
 }
 

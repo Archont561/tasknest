@@ -372,6 +372,168 @@
           }
         }
       ]
+    },
+    {
+      "id": "persistent-dependency-rejected",
+      "tasks": [
+        {
+          "path": "dev_server",
+          "name": "dev_server",
+          "description": "Long-running dev server.",
+          "persistent": true
+        },
+        {
+          "path": "after",
+          "name": "after",
+          "description": "Invalid downstream task.",
+          "depends": ["dev_server"]
+        }
+      ],
+      "invocations": [
+        {
+          "args": ["check"],
+          "expectExitCode": 2,
+          "expectStderrContains": ["cannot depend on persistent task"]
+        }
+      ]
+    },
+    {
+      "id": "persistent-cache-rejected",
+      "tasks": [
+        {
+          "path": "bad_dev",
+          "name": "bad_dev",
+          "description": "Invalid cached persistent task.",
+          "persistent": true,
+          "cache": true
+        }
+      ],
+      "invocations": [
+        {
+          "args": ["check"],
+          "expectExitCode": 2,
+          "expectStderrContains": ["cannot enable cache"]
+        }
+      ]
+    },
+    {
+      "id": "persistent-mark-plan-and-run",
+      "config": "[tasknest]\nconfig_version = 1\n\n[[discovery.roots]]\npath = \"tools\"\n\n[marks]\ndev = \"Development task\"\n\n[checks]\nstrict = true\nrequire_description = true\nunknown_marks = \"error\"\n",
+      "tasks": [
+        {
+          "path": "build",
+          "name": "build",
+          "description": "One-shot build.",
+          "prints": ["BUILT"]
+        },
+        {
+          "path": "dev_a",
+          "name": "dev_a",
+          "description": "Dev service A.",
+          "depends": ["build"],
+          "marks": ["dev"],
+          "persistent": true,
+          "prints": ["DEV_A_READY"]
+        },
+        {
+          "path": "dev_b",
+          "name": "dev_b",
+          "description": "Dev service B.",
+          "depends": ["build"],
+          "marks": ["dev"],
+          "persistent": true,
+          "prints": ["DEV_B_READY"]
+        }
+      ],
+      "invocations": [
+        {
+          "args": ["plan", "--mark", "dev"],
+          "expectExitCode": 0,
+          "expectStdoutContains": ["build", "dev_a", "dev_b", "persistent=true"]
+        },
+        {
+          "args": ["run", "--jobs", "1", "--mark", "dev"],
+          "expectExitCode": 2,
+          "expectStderrContains": ["persistent tasks concurrently"]
+        },
+        {
+          "args": ["run", "--json", "--mark", "dev"],
+          "expectExitCode": 0,
+          "expectJson": {
+            "schema_version": 1,
+            "status": "passed",
+            "taskStatus": { "build": "passed", "dev_a": "passed", "dev_b": "passed" }
+          }
+        }
+      ]
+    },
+    {
+      "id": "manifest-package-json-and-tier2-override",
+      "config": "[tasknest]\nconfig_version = 1\n\n[[discovery.roots]]\npath = \"tools\"\n\n[discovery]\nworkspaces = true\n\n[checks]\nstrict = true\nrequire_description = true\nunknown_marks = \"error\"\n\n[marks]\nfast = \"Fast task\"\n",
+      "tasks": [
+        {
+          "path": "web/build",
+          "name": "build",
+          "description": "Tier-2 web build override.",
+          "prints": ["TIER2_WEB_BUILD"]
+        }
+      ],
+      "extraFiles": {
+        "package.json": "{\"name\": \"mono\", \"workspaces\": [\"apps/*\"]}",
+        "bun.lock": "",
+        "apps/web/package.json": "{\"scripts\": {\"build\": \"echo WEB_MANIFEST_BUILD\", \"lint\": \"echo WEB_LINT\"}, \"tasknest\": {\"tasks\": {\"lint\": {\"marks\": [\"fast\"], \"depends\": [\"build\"]}}}}",
+        "apps/api/package.json": "{\"scripts\": {\"build\": \"echo API_BUILD\", \"lint\": \"echo API_LINT\"}, \"tasknest\": {\"tasks\": {\"lint\": {\"marks\": [\"fast\"]}}}}"
+      },
+      "invocations": [
+        {
+          "args": ["check"],
+          "expectExitCode": 0
+        },
+        {
+          "args": ["ls", "-p", "web"],
+          "expectExitCode": 0,
+          "expectStdoutContains": ["web build (web.build)", "web lint (web.lint)"],
+          "expectStdoutNotContains": ["api lint"]
+        },
+        {
+          "args": ["plan", "--each", "lint"],
+          "expectExitCode": 0,
+          "expectStdoutContains": ["web.build", "web.lint", "api.lint"]
+        },
+        {
+          "args": ["plan", "-p", "api", "--each", "lint"],
+          "expectExitCode": 0,
+          "expectStdoutContains": ["api.lint"],
+          "expectStdoutNotContains": ["web.lint"]
+        },
+        {
+          "args": ["run", "-p", "web", "lint"],
+          "expectExitCode": 0,
+          "expectStdoutContains": ["TIER2_WEB_BUILD", "WEB_LINT"],
+          "expectStdoutNotContains": ["WEB_MANIFEST_BUILD"]
+        }
+      ]
+    },
+    {
+      "id": "manifest-pyproject-and-package-flag",
+      "config": "[tasknest]\nconfig_version = 1\n\n[[discovery.manifests]]\npath = \"services/*\"\n\n[marks]\nci = \"CI task\"\n",
+      "extraFiles": {
+        "services/auth/pyproject.toml": "[tool.tasknest.tasks]\ntest = { cmd = [\"echo\", \"AUTH_TEST\"], marks = [\"ci\"] }\n",
+        "services/billing/pyproject.toml": "[tool.tasknest.tasks]\ntest = { cmd = [\"echo\", \"BILLING_TEST\"], marks = [\"ci\"] }\n"
+      },
+      "invocations": [
+        {
+          "args": ["run", "--each", "test"],
+          "expectExitCode": 0,
+          "expectStdoutContains": ["AUTH_TEST", "BILLING_TEST"]
+        },
+        {
+          "args": ["run", "-p", "auth", "--mark", "ci"],
+          "expectExitCode": 0,
+          "expectStdoutContains": ["AUTH_TEST"],
+          "expectStdoutNotContains": ["BILLING_TEST"]
+        }
+      ]
     }
   ]
 }

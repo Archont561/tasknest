@@ -1,4 +1,5 @@
 import {
+  createLineDispatcher,
   parseTomlWith,
   type RuntimeAdapter,
   type RuntimeSpawnResult,
@@ -7,6 +8,8 @@ import {
   watchPathWithNodeFs,
 } from "@/src/adapter";
 import { NotImplementedError } from "@/src/errors";
+
+const KILL_GRACE_MS = 1500;
 
 interface BunTomlNamespace {
   parse(input: string): unknown;
@@ -17,6 +20,14 @@ interface BunSyncProc {
   readonly stdout: Uint8Array;
   readonly stderr: Uint8Array;
   readonly exitedDueToTimeout?: boolean;
+}
+
+interface BunAsyncProc {
+  readonly pid: number;
+  readonly exited: Promise<number>;
+  readonly stdout: ReadableStream<Uint8Array> | null;
+  readonly stderr: ReadableStream<Uint8Array> | null;
+  kill(signal?: number | string): void;
 }
 
 interface BunGlobal {
@@ -32,6 +43,16 @@ interface BunGlobal {
       timeout?: number;
     },
   ): BunSyncProc;
+  spawn(
+    cmd: string[],
+    options: {
+      cwd?: string;
+      env?: Record<string, string | undefined>;
+      stdin?: "inherit" | "pipe" | "ignore";
+      stdout?: "inherit" | "pipe" | "ignore";
+      stderr?: "inherit" | "pipe" | "ignore";
+    },
+  ): BunAsyncProc;
 }
 
 function getBun(): BunGlobal {
@@ -40,6 +61,51 @@ function getBun(): BunGlobal {
     throw new NotImplementedError("Bun runtime is required for createBunAdapter().");
   }
   return bun;
+}
+
+async function pumpReadableStream(
+  stream: ReadableStream<Uint8Array> | null,
+  capture: boolean,
+  onLine: ((line: string) => void) | undefined,
+  fallbackWrite: (chunk: string) => void,
+): Promise<string> {
+  if (!stream) {
+    return "";
+  }
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  const dispatcher = onLine ? createLineDispatcher(onLine) : null;
+  let collected = "";
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) {
+        break;
+      }
+      const chunk = decoder.decode(value, { stream: true });
+      if (capture) {
+        collected += chunk;
+      } else if (dispatcher) {
+        dispatcher.push(chunk);
+      } else if (chunk) {
+        fallbackWrite(chunk);
+      }
+    }
+    const tail = decoder.decode();
+    if (tail) {
+      if (capture) {
+        collected += tail;
+      } else if (dispatcher) {
+        dispatcher.push(tail);
+      } else {
+        fallbackWrite(tail);
+      }
+    }
+    dispatcher?.flush();
+  } finally {
+    reader.releaseLock();
+  }
+  return collected;
 }
 
 export function createBunAdapter(): RuntimeAdapter {
@@ -87,6 +153,107 @@ export function createBunAdapter(): RuntimeAdapter {
           timedOut: false,
           spawnError,
         };
+      }
+    },
+    async spawnAsync(argv: readonly string[], options: SpawnOptions): Promise<RuntimeSpawnResult> {
+      const bun = getBun();
+      if (argv.length === 0 || !argv[0]) {
+        return {
+          exitCode: 1,
+          stdout: "",
+          stderr: "",
+          timedOut: false,
+          spawnError: new Error("Command argv must not be empty."),
+        };
+      }
+      if (options.signal?.aborted) {
+        return {
+          exitCode: 130,
+          stdout: "",
+          stderr: "",
+          timedOut: false,
+          cancelled: true,
+        };
+      }
+      const pipeIo = Boolean(
+        options.capture || options.onStdoutLine || options.onStderrLine || options.signal,
+      );
+      let proc: BunAsyncProc;
+      try {
+        proc = bun.spawn([...argv], {
+          cwd: options.cwd,
+          ...(options.env !== undefined ? { env: options.env } : {}),
+          stdin: "ignore",
+          stdout: pipeIo ? "pipe" : "inherit",
+          stderr: pipeIo ? "pipe" : "inherit",
+        });
+      } catch (err) {
+        return {
+          exitCode: 1,
+          stdout: "",
+          stderr: "",
+          timedOut: false,
+          spawnError: err instanceof Error ? err : new Error(String(err)),
+        };
+      }
+
+      let timedOut = false;
+      let cancelled = false;
+      const terminate = (): void => {
+        try {
+          proc.kill("SIGTERM");
+        } catch {
+          // already exited
+        }
+        const killTimer = setTimeout(() => {
+          try {
+            proc.kill("SIGKILL");
+          } catch {
+            // already exited
+          }
+        }, KILL_GRACE_MS);
+        killTimer.unref();
+      };
+
+      const onAbort = (): void => {
+        cancelled = true;
+        terminate();
+      };
+      if (options.signal) {
+        options.signal.addEventListener("abort", onAbort, { once: true });
+      }
+      const timeoutHandle =
+        options.timeoutMs !== undefined
+          ? setTimeout(() => {
+              timedOut = true;
+              terminate();
+            }, options.timeoutMs)
+          : undefined;
+
+      try {
+        const [exitCode, stdout, stderr] = await Promise.all([
+          proc.exited,
+          pumpReadableStream(proc.stdout, Boolean(options.capture), options.onStdoutLine, (c) =>
+            process.stdout.write(c),
+          ),
+          pumpReadableStream(proc.stderr, Boolean(options.capture), options.onStderrLine, (c) =>
+            process.stderr.write(c),
+          ),
+        ]);
+        return {
+          exitCode: cancelled ? 130 : exitCode,
+          stdout,
+          stderr,
+          timedOut,
+          cancelled,
+        };
+      } finally {
+        if (timeoutHandle !== undefined) {
+          clearTimeout(timeoutHandle);
+        }
+        if (options.signal) {
+          options.signal.removeEventListener("abort", onAbort);
+        }
       }
     },
     watchPath(targetPath: string, onChange: (filename: string | null) => void): WatchHandle {

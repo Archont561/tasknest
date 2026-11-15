@@ -1,0 +1,59 @@
+version: 1
+rules:
+  - id: require-pixi-manifest
+    kind: file_exists
+    paths: pixi.toml
+    level: error
+    message: pixi.toml is required.
+  - id: require-tasknest-config
+    kind: file_exists
+    paths: tasknest.toml
+    level: error
+    message: tasknest.toml is required.
+  - id: require-ci
+    kind: file_exists
+    paths: .github/workflows/ci.yml
+    level: error
+    message: CI workflow is required.
+  - id: require-templates
+    kind: dir_exists
+    paths: templates
+    level: error
+    message: templates directory is required.
+  - id: tools-dodo-only
+    kind: dir_only_contains
+    select: tools
+    allow:
+      - dodo.py
+    level: error
+    message: tools may only contain dodo.py.
+  - id: tools-no-subdirectories
+    kind: dir_absent
+    paths: 'tools/*'
+    level: error
+    message: tools may not contain subdirectories.
+  - id: tools-require-dodo
+    kind: file_exists
+    paths: tools/dodo.py
+    level: error
+    message: tools/dodo.py is required.
+  - id: require-sandbox-config
+    kind: file_exists
+    paths: pixi-sandbox.toml
+    level: error
+    message: pixi-sandbox.toml is required.
+  - id: require-sandbox-restore
+    kind: file_exists
+    paths: scripts/restore.sh
+    level: error
+    message: The generated pixi-sandbox restore launcher is required.
+  - id: require-sandbox-publisher
+    kind: file_exists
+    paths: .github/workflows/publish-sandbox.yml
+    level: error
+    message: The generated sandbox publishing workflow is required.
+  - id: require-sandbox-relock
+    kind: file_exists
+    paths: .github/workflows/relock.yml
+    level: error
+    message: The generated relock workflow is required.

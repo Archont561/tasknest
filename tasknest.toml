@@ -1,0 +1,29 @@
+# Proposed configuration; the Tasknest runtime does not consume this yet.
+[tasknest]
+config_version = 1
+
+[[discovery.roots]]
+path = "tools"
+namespace = ""
+project_root = "."
+
+[checks]
+strict = true
+require_description = true
+require_tests = true
+require_features = true
+unknown_marks = "error"
+
+[marks]
+fast = "Suitable for fast local checks"
+ci = "Included in CI checks"
+offline = "Expected not to require network access"
+network = "Requires network access"
+writes = "May modify project files"
+
+[execution]
+jobs = 1
+
+[skill]
+output = ".agents/skills/project-tools/SKILL.md"
+command = "pixi run tools"

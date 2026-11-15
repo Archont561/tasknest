@@ -1,0 +1,32 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.pytest.ini_options]
+testpaths = ["packages/python/tests"]
+
+# rude-clean-code is loaded via Rude's plugin entry point. CC0–CC3 are
+# deterministic checks; CC4–CC6 are heuristics; CC7–CC8 cover architecture
+# and patterns; CC9 covers documentation. Findings retain the plugin's own
+# severity (warnings are not automatically CI failures).
+[tool.rude]
+select = ["CC0", "CC1", "CC2", "CC3", "CC4", "CC5", "CC6", "CC7", "CC8", "CC9"]
+
+# Explicitly record the upstream default limits so they can be tuned here.
+[tool.rude.rules.CC101]
+max_lines = 30
+
+[tool.rude.rules.CC103]
+max_returns = 5
+
+# Suppressions for clean-code rules must include a reason.
+[tool.rude.rules.CC906]
+require_reason_for = ["CC"]
+
+# Runtime code must not depend on repository bootstrap automation or tests.
+[[tool.rude.rules.CC704.forbidden]]
+from_paths = ["packages/python/src/"]
+forbidden_modules = ["tools", "pytest"]

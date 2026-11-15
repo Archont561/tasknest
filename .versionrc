@@ -1,0 +1,15 @@
+header: |
+  # Changelog
+  All notable changes to Tasknest are documented here.
+types:
+  - {type: feat, section: Features, hidden: false}
+  - {type: fix, section: Fixes, hidden: false}
+  - {type: docs, section: Documentation, hidden: false}
+  - {type: refactor, section: Internal, hidden: true}
+  - {type: test, section: Internal, hidden: true}
+  - {type: build, section: Internal, hidden: true}
+  - {type: ci, section: Internal, hidden: true}
+  - {type: chore, section: Internal, hidden: true}
+  - {type: style, section: Internal, hidden: true}
+  - {type: perf, section: Performance, hidden: false}
+  - {type: revert, section: Reverts, hidden: false}

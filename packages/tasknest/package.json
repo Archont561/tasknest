@@ -5,6 +5,15 @@
   "license": "MIT",
   "type": "module",
   "description": "Native TypeScript task runner scaffold",
+  "homepage": "https://github.com/Archont561/tasknest#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Archont561/tasknest.git",
+    "directory": "packages/tasknest"
+  },
+  "bugs": {
+    "url": "https://github.com/Archont561/tasknest/issues"
+  },
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -20,7 +29,9 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "sideEffects": false,
   "engines": {

@@ -1,0 +1,36 @@
+[workspace]
+name = "tasknest"
+version = "0.1.0"
+channels = ["https://prefix.dev/archont561/archont561", "conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+pixi-sandbox = "=0.9.0"
+python = ">=3.12,<3.13"
+bun = ">=1.4,<2"
+lefthook = ">=2,<3"
+convco = ">=0.7,<1"
+actionlint = ">=1.7,<2"
+
+[pypi-dependencies]
+doit = ">=0.37,<0.38"
+pytest = ">=8,<10"
+ruff = ">=0.11,<1"
+mypy = ">=1.15,<3"
+tox = ">=4,<5"
+jinja2 = ">=3.1,<4"
+hatchling = ">=1.27,<2"
+alint = ">=0.22,<1"
+rude = ">=0.1a4,<0.2"
+rude-clean-code = ">=0.3.1,<0.4"
+gherlint = ">=0.5,<0.6"
+
+[tasks]
+bun-install = "bun install --frozen-lockfile"
+skills = "bun x --bun --no-install skills"
+backlog = "bun x --bun --no-install backlog"
+tools = "python -B -m doit -f tools/dodo.py"
+sandbox-plan = "pixi-sandbox plan --config pixi-sandbox.toml --json"
+sandbox-check = "pixi-sandbox init --script-path scripts/restore.sh --check"
+sandbox-init = "pixi-sandbox init --script-path scripts/restore.sh"
+hooks-install = "lefthook install"

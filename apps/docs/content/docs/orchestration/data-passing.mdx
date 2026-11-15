@@ -1,0 +1,22 @@
+---
+title: Data Passing & Scoped Env
+description: Share structured task outputs via ctx.output and ctx.deps without cross-file imports.
+---
+
+## `ctx.output(...)` and `ctx.deps[...]`
+
+Tasks produce structured outputs with `ctx.output(value)` and downstream dependents read them via read-only `ctx.deps["<canonical_name>"]`:
+
+- **Immediate validation:** JSON serializability is validated as soon as `ctx.output(...)` is called.
+- **Commit on success:** Outputs are buffered during task execution and committed only when the task succeeds—failed tasks never poison downstream tasks or caches.
+- **Declared dependencies only:** Reading a key from `ctx.deps` that is not listed in `depends` raises `ToolError`. Reading a declared dependency that emitted no output returns `None` / `undefined`.
+- **Cross-runner portable default:** JSON is the canonical format across Python and TypeScript. Python also supports opt-in local-only `format="pickle"` (never shared across runners or unpickled on ABI mismatch).
+
+## Scoped Environment (`ctx.env`)
+
+`ToolContext` tracks task-local environment reads and overrides without mutating global `os.environ` or `process.env`:
+
+- **Python:** `ctx.env(name, default=None)`, `ctx.set_env(name, value)`, `ctx.unset_env(name)`, `with ctx.scoped_env({...}): ...`
+- **TypeScript:** `ctx.env(name, defaultValue?)`, `ctx.setEnv(name, value)`, `ctx.unsetEnv(name)`, `await ctx.withEnv({...}, fn)`
+
+Every accessed environment key is automatically recorded so cached tasks incorporate dynamic env reads into their full cache key.

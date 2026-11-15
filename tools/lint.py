@@ -11,4 +11,6 @@ def lint(ctx: ToolContext) -> None:
     ctx.run(["ruff", "check", "tools", "packages/tasknest-py"])
     ctx.run(["rude", "check", "packages/tasknest-py/src", "tools"])
     ctx.run(["gherlint", "lint", "packages/tasknest-py/features"])
-    ctx.run(["bun", "x", "--bun", "--no-install", "biome", "lint", "packages/tasknest-ts"])
+    ctx.run(
+        ["bun", "x", "--bun", "--no-install", "biome", "lint", "packages/tasknest-ts", "apps/docs"]
+    )

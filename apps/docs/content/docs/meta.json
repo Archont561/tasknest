@@ -1,0 +1,11 @@
+{
+  "title": "Tasknest Docs",
+  "pages": [
+    "index",
+    "getting-started",
+    "contract",
+    "orchestration",
+    "runners",
+    "decisions"
+  ]
+}

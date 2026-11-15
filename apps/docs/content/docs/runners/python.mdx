@@ -1,0 +1,17 @@
+---
+title: Python Runner (tasknest-py)
+description: Decorator-based Python task definitions, adapters, and testing utilities.
+---
+
+- Package: `packages/tasknest-py/` (`tasknest` on PyPI)
+- Supported Python versions: `3.10`, `3.11`, `3.12`, `3.13`, `3.14`
+- Key exports: `tool`, `ToolContext`, `CommandResult`, `CliRunner`, `discover_tasks`, `RuffAdapter`, `MypyAdapter`, `PytestAdapter`, `PixiAdapter`, `AffectedContext`, `WatchSession`.
+
+```python
+from tasknest import ToolContext, tool
+
+@tool(inputs=["src/**/*.py"], outputs=["dist/meta.json"], cache=True)
+def build(ctx: ToolContext) -> None:
+    """Build metadata."""
+    ctx.output({"built": True})
+```

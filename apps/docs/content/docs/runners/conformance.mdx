@@ -1,0 +1,16 @@
+---
+title: Conformance Suite
+description: Shared cross-language behavioral scenarios in conformance/scenarios.json.
+---
+
+`conformance/scenarios.json` defines 11 shared end-to-end scenarios executed identically by `pytest` (`packages/tasknest-py/tests/test_conformance.py`) and `bun test` (`packages/tasknest-ts/tests/conformance.test.ts`):
+
+- Discovery nesting & `_` / `tests/` / `features/` exclusions
+- Longest-prefix CLI matching & `--` positional disambiguation
+- Typed options & validation exit code `2`
+- Diamond graphs, failure blocking, and cycle detection
+- Strict mark validation & mark filtering (`--mark`)
+- Skill drift detection & `--force` overwrite protection
+- `ctx.output(...)` & `ctx.deps[...]` data passing
+- Cache hits, `--force` bypass, and missing-output invalidation
+- `--json` pure stdout report & stderr redirection

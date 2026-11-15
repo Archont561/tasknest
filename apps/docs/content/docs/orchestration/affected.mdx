@@ -1,0 +1,21 @@
+---
+title: Affected Change Selection
+description: Inspect git diff context via ctx.affected and narrow test suites conservatively.
+---
+
+## `ctx.affected`
+
+Pass `--changed-base <ref>` (comparing `<ref>` against `WORKTREE`, including untracked files) or `--changed <path>` to populate `ctx.affected`:
+
+- Each `ChangedFile` carries `path`, `status` (`added`, `modified`, `deleted`, `renamed`, `copied`, `untracked`, `unknown`), and `old_path` (`oldPath` in TS) for renames and deletions.
+- Missing or failed git contexts set `available=False` / `complete=False` with an explicit `reason` instead of silently returning empty changes.
+
+## Conservative Selectors
+
+`select_conservative_targets` / `selectConservativeTargets` (and `PytestAdapter.run_affected` / `BunAdapter.runAffected`) fall back to the full test suite whenever impact cannot be narrowed safely:
+
+- Unavailable or incomplete change context
+- Missing reverse source-to-test map
+- Global config/lockfile changes (`pyproject.toml`, `package.json`, `tsconfig.json`, `bun.lock`, `pixi.toml`, `pixi.lock`, `tasknest.toml`, `conftest.py`)
+- Unmapped changes, renames, or deletions
+- `--all` or `--force` override

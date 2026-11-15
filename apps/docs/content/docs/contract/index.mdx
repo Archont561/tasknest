@@ -1,0 +1,47 @@
+---
+title: Runner Model & CLI Contract
+description: Discovery rules, typed task parameters, CLI path resolution, dependency validation, and exit codes.
+---
+
+This specification defines the normative M1–M4 contract shared by `tasknest-py` and `tasknest-ts`.
+
+## Discovery and Registration
+
+- **One task per file:** Each discovered non-underscore source file under a `[[discovery.roots]]` entry must register **exactly one** task (`0` or `> 1` raises a discovery error).
+- **Exclusions:** Files or directories starting with `_` (such as `_helpers.py`, `__init__.py`) and top-level `tests/` and `features/` folders directly under a discovery root are ignored.
+- **Canonical names & CLI paths:** `check/dev.py` maps to canonical name `check.dev` and CLI path `check dev` (prefixed by `namespace` if configured). Duplicate canonical names fail discovery.
+
+<Callout type="warn" title="Trusted Code">
+  Discovery imports task modules and executes top-level code. Discovery is not a sandbox; run Tasknest only on trusted repositories.
+</Callout>
+
+## Typed Task Parameters
+
+- Python derives CLI flags from type annotations (`str`, `int`, `float`, `bool`, `Path`, `T | None`, `Literal[...]`, `list[T]`).
+- TypeScript derives CLI flags from the `options` array (`"string"`, `"int"`, `"float"`, `"boolean"`, `"path"`, `choices`, `multiple`, `optional`, `default`).
+- Snake-case parameter names map to kebab-case flags (`dry_run` → `--dry-run`); booleans accept `--flag` and `--no-flag`.
+
+## CLI Grammar & Disambiguation
+
+```text
+tasknest [GLOBAL OPTIONS] <command> [ARGS...]
+```
+
+- **Global options (before subcommand only):** `--root <path>`, `--config <path>`, `-v`/`--verbose`, `-h`/`--help`, `--version`.
+- **Subcommands:**
+  - `ls [--mark <name>]` — List discovered tasks.
+  - `help [task...]` — Show global or task help.
+  - `check` — Validate discovery, parameters, marks, and dependency cycles without running tasks.
+  - `plan [--mark <name> | <task...>]` — Print execution order and declared effects.
+  - `run [RUN FLAGS] [--mark <name> | <task...>] [task args...]` — Execute tasks.
+  - `watch [WATCH FLAGS] <task...>` — Watch declared `inputs` and re-run dirty subgraph.
+  - `skill [--check | --write [--force]]` — Verify or write generated `SKILL.md`.
+- **Longest-prefix resolution:** Non-flag tokens match the longest registered task path; use `--` to disambiguate positional arguments (e.g. `tasknest run a -- b` passes `b` positionally to `a` even when `a.b` exists).
+
+## Exit Codes
+
+| Exit Code | Meaning |
+| --- | --- |
+| `0` | Success |
+| `1` | Task execution / runtime failure |
+| `2` | CLI usage, config, discovery, validation, or dependency graph error |

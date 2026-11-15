@@ -12,3 +12,16 @@ def typecheck(ctx: ToolContext) -> None:
     ctx.run(
         ["bun", "x", "--bun", "--no-install", "tsc", "-p", "packages/tasknest-ts/tsconfig.json"]
     )
+    ctx.run(["bun", "run", "--cwd", "apps/docs", "postinstall"])
+    ctx.run(
+        [
+            "bun",
+            "x",
+            "--bun",
+            "--no-install",
+            "tsc",
+            "-p",
+            "apps/docs/tsconfig.json",
+            "--noEmit",
+        ]
+    )

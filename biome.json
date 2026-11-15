@@ -1,7 +1,18 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.6.7/schema.json",
   "files": {
-    "includes": ["packages/tasknest-ts/**", "!packages/tasknest-ts/dist", "!**/node_modules"]
+    "includes": [
+      "packages/tasknest-ts/**",
+      "apps/docs/src/**",
+      "apps/docs/next.config.mjs",
+      "apps/docs/source.config.ts",
+      "apps/docs/postcss.config.mjs",
+      "!packages/tasknest-ts/dist",
+      "!apps/docs/.next",
+      "!apps/docs/.source",
+      "!apps/docs/out",
+      "!**/node_modules"
+    ]
   },
   "formatter": {
     "indentStyle": "space",

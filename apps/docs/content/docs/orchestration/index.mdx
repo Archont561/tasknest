@@ -1,0 +1,13 @@
+---
+title: Orchestration Overview
+description: Data passing, opt-in caching, parallelism, affected selection, watch mode, and JSON reports.
+---
+
+Milestone M4 adds composable execution primitives shared across `tasknest-py` and `tasknest-ts`:
+
+1. **[Data Passing & Scoped Env](/docs/orchestration/data-passing):** `ctx.output(...)`, read-only `ctx.deps[...]`, and task-local `ctx.env(...)`.
+2. **[Opt-In Caching](/docs/orchestration/caching):** Content-hashed `.tasknest/cache/` with early cutoff and declared-output verification.
+3. **[Parallelism & Resource Safety](/docs/orchestration/parallelism):** `--jobs`, `resources` conflict locking, `TASKNEST_WORKER_BUDGET`, and `--fail-fast`.
+4. **[Affected Change Selection](/docs/orchestration/affected):** `ctx.affected` git diff context and conservative fallback selectors.
+5. **[DAG-Aware Watch Mode](/docs/orchestration/watch):** `tasknest watch <task>` with self-output filtering and early cutoff.
+6. **[JSON Reports & Redaction](/docs/orchestration/reports):** Versioned `schema_version = 1` reports with `--json` stdout purity and secret redaction.

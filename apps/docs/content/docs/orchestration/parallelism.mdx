@@ -1,0 +1,13 @@
+---
+title: Parallelism & Resource Safety
+description: Opt-in dependency-aware concurrency with resource locks and worker budgets.
+---
+
+By default, Tasknest runs sequentially (`jobs = 1`). Enable dependency-aware concurrency with `--jobs N` (or `-j N`) or `jobs` in `tasknest.toml`.
+
+## Guarantees
+
+- **Topological readiness:** A task starts only after all of its `depends` prerequisites succeed.
+- **Resource locks:** Tasks declaring overlapping `resources` (for example `resources=["db"]`) never run concurrently.
+- **Worker budget:** Set `TASKNEST_WORKER_BUDGET=<n>` to cap effective parallelism across nested runners (`effective_jobs = min(requested_jobs, budget)`).
+- **Failure handling:** When a task fails, downstream dependents are marked `blocked`. With `--fail-fast`, remaining unstarted tasks are immediately marked `cancelled`.

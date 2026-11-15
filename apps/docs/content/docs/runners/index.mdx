@@ -1,0 +1,10 @@
+---
+title: Runners Overview
+description: Native Python and TypeScript runners sharing one behavioral contract.
+---
+
+Tasknest provides two native runners with zero cross-runtime dependency at execution time:
+
+- **[Python Runner (`tasknest`)](/docs/runners/python):** Supports Python `>= 3.10` with optional `[skill]` (`jinja2`) extra.
+- **[TypeScript Runner (`@archont561/tasknest`)](/docs/runners/typescript):** ESM package supporting **Bun `>= 1.1`** and **Node.js `>= 20`** via `RuntimeAdapter`.
+- **[Shared Conformance Suite](/docs/runners/conformance):** `conformance/scenarios.json` verifies identical CLI, graph, data-passing, caching, and reporting semantics across both runners.

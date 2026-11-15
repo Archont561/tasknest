@@ -1,0 +1,15 @@
+---
+title: JSON Reports & Redaction
+description: Emit versioned, secret-redacted machine-readable reports via --json and --report.
+---
+
+```sh
+tasknest run --json test
+tasknest run --report dist/report.json test
+```
+
+## Report Contract (`schema_version: 1`)
+
+- **Pure stdout:** With `--json`, stdout contains only the JSON report document. Task and subprocess stdout are redirected to `stderr`.
+- **Distinct task states:** Every task record reports `status` (`passed`, `failed`, `skipped`, `blocked`, `cancelled`), `cache_status` (`hit`, `miss`, `bypassed`, `disabled`), `duration_ms`, `commands`, `error`, and `output_hash`.
+- **Secret redaction:** Built-in redaction masks sensitive flag values (`--token`, `--password`, `--api-key`, etc.), `Bearer` headers, URL credentials (`https://user:pass@`), and known token prefixes (`ghp_`, `github_pat_`, `pypi-`, `npm_`, `sk-`).

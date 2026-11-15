@@ -1,0 +1,25 @@
+---
+title: TypeScript Runner (tasknest-ts)
+description: Native TypeScript runner for Bun and Node.js via RuntimeAdapter.
+---
+
+- Package: `packages/tasknest-ts/` (`@archont561/tasknest` on npm & GitHub Packages)
+- Supported runtimes: Bun `>= 1.1` (`createBunAdapter`) and Node.js `>= 20` (`createNodeAdapter`)
+- Key exports: `tool`, `ToolContext`, `CommandResult`, `CliRunner`, `withIsolatedWorkspace`, `discoverTasks`, `BunAdapter`, `NodeAdapter`, `AffectedContext`, `WatchSession`.
+
+```ts
+import { tool } from "@archont561/tasknest";
+
+export default tool(
+  {
+    name: "build",
+    description: "Build metadata.",
+    inputs: ["src/**/*.ts"],
+    outputs: ["dist/meta.json"],
+    cache: true,
+  },
+  (ctx) => {
+    ctx.output({ built: true });
+  },
+);
+```

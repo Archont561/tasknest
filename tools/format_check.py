@@ -9,4 +9,15 @@ from tasknest import ToolContext, tool
 def format_check(ctx: ToolContext) -> None:
     """Check Python and TypeScript formatting."""
     ctx.run(["ruff", "format", "--check", "tools", "packages/tasknest-py"])
-    ctx.run(["bun", "x", "--bun", "--no-install", "biome", "format", "packages/tasknest-ts"])
+    ctx.run(
+        [
+            "bun",
+            "x",
+            "--bun",
+            "--no-install",
+            "biome",
+            "format",
+            "packages/tasknest-ts",
+            "apps/docs",
+        ]
+    )

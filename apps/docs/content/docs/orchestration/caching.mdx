@@ -1,0 +1,23 @@
+---
+title: Opt-In Caching
+description: Content-hashed caching under .tasknest/cache/ with early cutoff and output verification.
+---
+
+Caching is **opt-in** per task (`cache=True` / `cache: true`). Uncached tasks always execute.
+
+## Cache Key Inputs
+
+When `cache` is enabled, Tasknest computes a deterministic canonical-JSON SHA-256 static key from:
+
+- Declared `inputs` (files, directories, and globs hashed by content)
+- Normalized CLI option values
+- Declared `env` keys
+- Upstream `ctx.output` SHA-256 digests (`deps`), enabling **early cutoff**
+
+The static key combines with dynamic `ctx.env(...)` reads recorded in `.meta.json` to form the full cache key.
+
+## Verification & Invalidation
+
+- Cache entries live in `.tasknest/cache/` (`entries/`, `blobs/`, and Python-only `local/*.pkl`).
+- Before returning a hit, Tasknest checks that all declared `outputs` still exist on disk and match their recorded SHA-256 hashes. Deleting or modifying a declared output automatically invalidates the entry.
+- Pass `--force` or `--no-cache` to bypass cache lookups.

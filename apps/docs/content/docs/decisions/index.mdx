@@ -1,0 +1,18 @@
+---
+title: Architecture Decision Records
+description: Accepted design decisions guiding Tasknest's architecture.
+---
+
+All Architecture Decision Records (ADRs) live in `backlog/decisions/` in the repository:
+
+| ADR | Decision |
+| --- | --- |
+| `decision-1` | Native-language runners (`tasknest-py`, `tasknest-ts`) with shared conventions |
+| `decision-2` | File-based task discovery (`one task per file`) and strict validation |
+| `decision-3` | CLI task paths and direct typed arguments without mandatory `--` |
+| `decision-4` | Explicit task metadata (`depends`, `marks`, `requires`) |
+| `decision-5` | Bootstrap repository automation with `doit` until Tasknest existed (now self-hosted in `tools/`) |
+| `decision-6` | Conservative affected test selection with full-suite fallback |
+| `decision-7` | Optional ecosystem adapters and reusable plugin interfaces |
+| `decision-8` | Opt-in content-hashed caching and explicit execution effects |
+| `decision-9` | Structured `ctx.output(...)`, read-only `ctx.deps[...]`, and scoped `ctx.env(...)` |

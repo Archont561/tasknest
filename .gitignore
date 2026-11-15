@@ -9,3 +9,8 @@ node_modules/
 coverage/
 dist/
 .tasknest/
+.source/
+apps/docs/.next/
+apps/docs/out/
+apps/docs/next-env.d.ts
+*.tsbuildinfo

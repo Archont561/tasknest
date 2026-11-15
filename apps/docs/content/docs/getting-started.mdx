@@ -1,0 +1,98 @@
+---
+title: Getting Started
+description: Configure tasknest.toml, write your first Python and TypeScript tasks, and run the CLI.
+---
+
+## 1. Install
+
+Choose the native runner for your ecosystem (or use both in polyglot repositories):
+
+```sh
+# Python (>= 3.10)
+pip install tasknest
+
+# TypeScript (Bun >= 1.1 or Node.js >= 20)
+bun add -D @archont561/tasknest
+# or: npm install -D @archont561/tasknest
+```
+
+## 2. Configure `tasknest.toml`
+
+Place `tasknest.toml` at your repository root:
+
+```toml
+[tasknest]
+config_version = 1
+
+[[discovery.roots]]
+path = "tools"
+namespace = ""
+project_root = "."
+
+[marks]
+fast = "Quick local check"
+writes = "Modifies repository files"
+
+[checks]
+strict = true
+require_description = true
+unknown_marks = "error"
+
+[skill]
+output = ".agents/skills/project-tools/SKILL.md"
+command = "tasknest"
+```
+
+## 3. Write a Task
+
+Each discovered file under `tools/` exports **exactly one** task.
+
+### Python (`tools/lint.py`)
+
+```python
+from pathlib import Path
+from tasknest import ToolContext, tool
+
+@tool(depends=["format.check"], marks=["fast"], requires=["ruff"])
+def lint(ctx: ToolContext, path: Path = Path("."), fix: bool = False) -> None:
+    """Lint the workspace."""
+    argv = ["ruff", "check", str(path)]
+    if fix:
+        argv.append("--fix")
+    ctx.run(argv)
+```
+
+### TypeScript (`tools/lint.ts`)
+
+```ts
+import { tool } from "@archont561/tasknest";
+
+export default tool(
+  {
+    name: "lint",
+    description: "Lint the workspace.",
+    depends: ["format.check"],
+    marks: ["fast"],
+    requires: ["biome"],
+    options: [
+      { name: "path", type: "path", default: "." },
+      { name: "fix", type: "boolean", default: false },
+    ],
+  },
+  (ctx, args) => {
+    const argv = ["biome", "check", String(args.path)];
+    if (args.fix) argv.push("--write");
+    ctx.run(argv);
+  },
+);
+```
+
+## 4. Validate and Run
+
+```sh
+tasknest ls
+tasknest check
+tasknest plan lint
+tasknest run lint --path src --fix
+tasknest skill --write
+```

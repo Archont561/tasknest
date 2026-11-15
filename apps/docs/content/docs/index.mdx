@@ -1,0 +1,38 @@
+---
+title: Tasknest
+description: Native Python and TypeScript file-based task runners with shared conventions.
+---
+
+Tasknest is a file-oriented task runner for Python (`tasknest`) and TypeScript (`@archont561/tasknest`, supporting Bun and Node.js 20+). Tasks live as ordinary source files under configured discovery roots—one task per file—with typed CLI arguments, dependency graphs, strict structural checks, opt-in caching, parallel execution, affected test selection, DAG-aware watch mode, and versioned JSON reports.
+
+## Key Capabilities
+
+- **File-based discovery (`tools/`):** Nested files derive canonical dotted names (`check/dev.py` → `check.dev`) and space-separated CLI paths (`tasknest run check dev`).
+- **Typed task options:** Python type annotations and TypeScript `options` schemas map directly to validated CLI flags (`--flag`, `--no-flag`, repeatable lists, choices).
+- **Dependency DAG & data passing:** Declare prerequisites with `depends`, emit structured outputs via `ctx.output(...)`, and read declared upstream results via read-only `ctx.deps[...]`.
+- **Opt-in content-hashed cache:** Cache declared `inputs`, `outputs`, `env`, and upstream `ctx.output` hashes under `.tasknest/cache/` with early cutoff and `--force` / `--no-cache` bypasses.
+- **Opt-in parallel scheduler:** Run independent tasks concurrently with `--jobs`, enforce `resources` mutual exclusion, bound workers with `TASKNEST_WORKER_BUDGET`, and stop early with `--fail-fast`.
+- **Affected selection & watch mode:** Inspect git changes via `ctx.affected`, narrow test runs conservatively, and watch declared `inputs` with `tasknest watch <task>`.
+- **Machine-readable reports & Agent Skills:** Emit redacted `schema_version = 1` JSON via `--json` / `--report`, and generate deterministic `SKILL.md` files via `tasknest skill`.
+
+## Quick Start
+
+```sh
+# Python
+pip install tasknest
+
+# TypeScript / Bun / Node.js
+bun add -D @archont561/tasknest
+# or: npm install -D @archont561/tasknest
+```
+
+Run Tasknest commands against your workspace:
+
+```sh
+tasknest ls
+tasknest check
+tasknest plan test
+tasknest run lint --path src
+tasknest run --json --report dist/report.json test
+tasknest watch build
+```

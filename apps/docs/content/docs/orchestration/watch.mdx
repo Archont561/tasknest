@@ -1,0 +1,17 @@
+---
+title: DAG-Aware Watch Mode
+description: Monitor declared inputs and incrementally re-run only the minimal dirty subgraph.
+---
+
+Start watch mode for any target task and its resolved dependency DAG:
+
+```sh
+tasknest watch build
+tasknest watch --interval 250 --jobs 2 --json build
+```
+
+## Incremental Execution & Early Cutoff
+
+- **Input monitoring:** Watches declared `inputs` across the target DAG (via polling in Python and `RuntimeAdapter.watchPath` + content-hash verification in TypeScript).
+- **Self-output loop protection:** Writes to a task's own declared `outputs` and `.tasknest/` are ignored, and unchanged file content hashes never re-trigger execution.
+- **Early cutoff:** Clean upstream tasks seed their last `ctx.output` values into dirty downstream tasks; when an upstream task re-runs without changing its `ctx.output` digest, cached downstream tasks hit cache and are skipped.

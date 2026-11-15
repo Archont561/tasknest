@@ -85,6 +85,24 @@ def _pages() -> bool:
     return render_pages(ROOT)
 
 
+def _ts_compat() -> bool:
+    tools_dir = str(Path(__file__).resolve().parent)
+    if tools_dir not in sys.path:
+        sys.path.insert(0, tools_dir)
+    from _ts_compat import verify_ts_compat
+
+    return verify_ts_compat(ROOT)
+
+
+def _py_compat() -> bool:
+    tools_dir = str(Path(__file__).resolve().parent)
+    if tools_dir not in sys.path:
+        sys.path.insert(0, tools_dir)
+    from _py_compat import verify_py_compat
+
+    return verify_py_compat(ROOT)
+
+
 def task_alint() -> dict[str, object]:
     """Check repository policy."""
     return _action("alint", _CHECK)
@@ -144,6 +162,16 @@ def task_docs_write() -> dict[str, object]:
 def task_pages() -> dict[str, object]:
     """Render root README.md into dist/ for GitHub Pages."""
     return _tasks(_pages)
+
+
+def task_py_compat() -> dict[str, object]:
+    """Build and verify packages/python wheel and sdist compatibility."""
+    return _tasks(_py_compat, basename="py-compat")
+
+
+def task_ts_compat() -> dict[str, object]:
+    """Build, pack, and verify packages/tasknest tarball compatibility."""
+    return _tasks(_ts_compat, basename="ts-compat")
 
 
 def task_test() -> dict[str, object]:

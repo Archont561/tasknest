@@ -17,7 +17,7 @@ ordinal: 10000
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Pilot Cargo, Ruff, pytest or actionlint wrappers based on actual repository workflows; retain a command escape hatch.
+Pilot Cargo, Ruff, pytest, Bun, Node.js/npm, or actionlint wrappers based on actual repository workflows; retain a command escape hatch.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria

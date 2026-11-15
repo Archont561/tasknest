@@ -25,6 +25,7 @@
   </a>
   <img alt="python 3.10+" src="https://img.shields.io/badge/python-%3E%3D3.10-blue.svg" />
   <img alt="bun 1.4+" src="https://img.shields.io/badge/bun-%3E%3D1.4-f472b6.svg" />
+  <img alt="node 20+" src="https://img.shields.io/badge/node-%3E%3D20-339933.svg" />
   <a href="https://github.com/Archont561/tasknest/blob/main/LICENSE" target="_blank">
     <img alt="License: MIT" src="https://img.shields.io/github/license/Archont561/tasknest" />
   </a>

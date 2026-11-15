@@ -5,6 +5,22 @@ import { ConfigError } from "@/src/errors";
 
 export const DEFAULT_CONFIG_NAME = "tasknest.toml";
 
+export type UnknownMarkMode = "ignore" | "warn" | "error";
+
+export interface ChecksConfig {
+  readonly strict: boolean;
+  readonly requireDescription: boolean;
+  readonly requireTests: boolean;
+  readonly requireFeatures: boolean;
+  readonly unknownMarks: UnknownMarkMode;
+}
+
+export interface SkillConfig {
+  readonly output: string;
+  readonly command: string;
+  readonly template?: string;
+}
+
 export interface DiscoveryRoot {
   readonly path: string;
   readonly namespace: string;
@@ -16,7 +32,22 @@ export interface TasknestConfig {
   readonly roots: readonly DiscoveryRoot[];
   readonly marks: Readonly<Record<string, string>>;
   readonly jobs: number;
+  readonly checks: ChecksConfig;
+  readonly skill: SkillConfig;
 }
+
+const DEFAULT_CHECKS: ChecksConfig = {
+  strict: false,
+  requireDescription: false,
+  requireTests: false,
+  requireFeatures: false,
+  unknownMarks: "ignore",
+};
+
+const DEFAULT_SKILL: SkillConfig = {
+  output: ".agents/skills/project-tools/SKILL.md",
+  command: "tasknest",
+};
 
 export interface LoadConfigOptions {
   readonly configPath?: string;
@@ -111,6 +142,67 @@ function resolveTarget(resolvedRoot: string, configPath?: string): string | unde
   return target;
 }
 
+function parseBoolField(
+  table: Record<string, unknown>,
+  key: string,
+  fallback: boolean,
+  section: string,
+): boolean {
+  const val = table[key] ?? fallback;
+  if (typeof val !== "boolean") {
+    throw new ConfigError(`[${section}].${key} must be a boolean.`);
+  }
+  return val;
+}
+
+function parseChecks(raw: Record<string, unknown>): ChecksConfig {
+  const checks = raw.checks;
+  if (checks === undefined) {
+    return DEFAULT_CHECKS;
+  }
+  if (!isPlainObject(checks)) {
+    throw new ConfigError("[checks] must be a table.");
+  }
+  const mode = checks.unknown_marks ?? "ignore";
+  if (mode !== "ignore" && mode !== "warn" && mode !== "error") {
+    throw new ConfigError("[checks].unknown_marks must be 'ignore', 'warn', or 'error'.");
+  }
+  return {
+    strict: parseBoolField(checks, "strict", false, "checks"),
+    requireDescription: parseBoolField(checks, "require_description", false, "checks"),
+    requireTests: parseBoolField(checks, "require_tests", false, "checks"),
+    requireFeatures: parseBoolField(checks, "require_features", false, "checks"),
+    unknownMarks: mode,
+  };
+}
+
+function parseSkill(raw: Record<string, unknown>): SkillConfig {
+  const skill = raw.skill;
+  if (skill === undefined) {
+    return DEFAULT_SKILL;
+  }
+  if (!isPlainObject(skill)) {
+    throw new ConfigError("[skill] must be a table.");
+  }
+  const output = skill.output ?? DEFAULT_SKILL.output;
+  const command = skill.command ?? DEFAULT_SKILL.command;
+  const template = skill.template;
+  if (typeof output !== "string" || output.length === 0) {
+    throw new ConfigError("[skill].output must be a non-empty string.");
+  }
+  if (typeof command !== "string" || command.length === 0) {
+    throw new ConfigError("[skill].command must be a non-empty string.");
+  }
+  if (template !== undefined && (typeof template !== "string" || template.length === 0)) {
+    throw new ConfigError("[skill].template must be a non-empty string.");
+  }
+  return {
+    output,
+    command,
+    ...(template !== undefined ? { template } : {}),
+  };
+}
+
 export function loadConfig(repoRoot: string, options: LoadConfigOptions = {}): TasknestConfig {
   const resolvedRoot = resolve(repoRoot);
   const target = resolveTarget(resolvedRoot, options.configPath);
@@ -120,6 +212,8 @@ export function loadConfig(repoRoot: string, options: LoadConfigOptions = {}): T
       roots: [{ path: "tools", namespace: "", projectRoot: "." }],
       marks: {},
       jobs: 1,
+      checks: DEFAULT_CHECKS,
+      skill: DEFAULT_SKILL,
     };
   }
   const adapter = options.adapter ?? createRuntimeAdapter();
@@ -129,5 +223,7 @@ export function loadConfig(repoRoot: string, options: LoadConfigOptions = {}): T
     roots: parseRoots(raw),
     marks: parseMarks(raw.marks),
     jobs: parseJobs(raw),
+    checks: parseChecks(raw),
+    skill: parseSkill(raw),
   };
 }

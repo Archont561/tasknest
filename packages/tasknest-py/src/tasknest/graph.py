@@ -138,6 +138,30 @@ def _step_task(
         state.succeeded.append(name)
 
 
+def run_order(
+    registry: TaskRegistry,
+    order: tuple[str, ...],
+    *,
+    is_verbose: bool = False,
+) -> ExecutionReport:
+    """Execute a pre-resolved task order sequentially; failures block dependents."""
+    deps_map = validate_graph(registry)
+    state = _RunState()
+    for name in order:
+        if any(dep in state.unmet for dep in deps_map[name]):
+            state.blocked.append(name)
+            state.unmet.add(name)
+            continue
+        _step_task(name, registry, {}, state, is_verbose=is_verbose)
+    return ExecutionReport(
+        succeeded=tuple(state.succeeded),
+        failed=tuple(state.failed),
+        blocked=tuple(state.blocked),
+        errors=state.errors,
+        exit_code=state.exit_code,
+    )
+
+
 def run_plan(
     registry: TaskRegistry,
     target_name: str,

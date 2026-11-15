@@ -1,7 +1,7 @@
 import type { RuntimeAdapter } from "@/src/adapter";
 import { ToolContext } from "@/src/context";
 import type { TaskRegistry } from "@/src/discovery";
-import { DependencyError } from "@/src/errors";
+import { DependencyError, TasknestError } from "@/src/errors";
 import { createDefaultArgValues, isTaskDefinition, type TaskDefinition } from "@/src/task";
 
 export interface ExecutionReport {
@@ -104,12 +104,12 @@ export function resolvePlan(registry: TaskRegistry, target: string): string[] {
   return order;
 }
 
-export async function executePlan(
+export async function executeOrder(
   registry: TaskRegistry,
-  target: string,
+  order: readonly string[],
   options: ExecutePlanOptions = {},
+  target?: string,
 ): Promise<ExecutionReport> {
-  const order = resolvePlan(registry, target);
   const executed: string[] = [];
 
   for (let idx = 0; idx < order.length; idx += 1) {
@@ -125,7 +125,7 @@ export async function executePlan(
       verbose: options.verbose ?? false,
       ...(options.adapter !== undefined ? { adapter: options.adapter } : {}),
     });
-    const isTarget = name === target;
+    const isTarget = target !== undefined && name === target;
     const args =
       isTarget && options.targetValues
         ? options.targetValues
@@ -137,8 +137,9 @@ export async function executePlan(
       executed.push(name);
     } catch (err) {
       const failureMessage = err instanceof Error ? err.message : String(err);
+      const exitCode = err instanceof TasknestError ? err.exitCode : 1;
       return {
-        exitCode: 1,
+        exitCode,
         executed,
         blocked: order.slice(idx + 1),
         failedTask: name,
@@ -151,4 +152,13 @@ export async function executePlan(
     executed,
     blocked: [],
   };
+}
+
+export async function executePlan(
+  registry: TaskRegistry,
+  target: string,
+  options: ExecutePlanOptions = {},
+): Promise<ExecutionReport> {
+  const order = resolvePlan(registry, target);
+  return executeOrder(registry, order, options, target);
 }

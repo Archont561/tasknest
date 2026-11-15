@@ -33,6 +33,7 @@ export interface DiscoveredTask {
   readonly cliPath: readonly string[];
   readonly definition: TaskDefinition;
   readonly sourcePath: string;
+  readonly rootDir: string;
   readonly projectRoot: string;
   readonly description: string;
 }
@@ -191,6 +192,7 @@ async function registerRootTasks(
       cliPath: segments,
       definition,
       sourcePath: filePath,
+      rootDir,
       projectRoot,
       description: definition.description,
     };

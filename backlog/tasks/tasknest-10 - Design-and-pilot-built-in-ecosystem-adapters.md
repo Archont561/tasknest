@@ -1,10 +1,10 @@
 ---
 id: TASKNEST-10
 title: Design and pilot built-in ecosystem adapters
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-15T00:46:00Z'
-updated_date: '2026-11-15T00:47:00Z'
+updated_date: '2026-11-15T16:40:00Z'
 labels:
   - feature
 milestone: m-2
@@ -22,7 +22,7 @@ Pilot Cargo, Ruff, pytest, Bun, Node.js/npm, or actionlint wrappers based on act
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Adapters use shared subprocess and result handling
-- [ ] #2 External executable availability is diagnosed without installing it
-- [ ] #3 Affected pytest behavior falls back safely when mapping is unknown
+- [x] #1 Adapters use shared subprocess and result handling
+- [x] #2 External executable availability is diagnosed without installing it
+- [x] #3 Affected pytest behavior falls back safely when mapping is unknown
 <!-- AC:END -->

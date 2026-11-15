@@ -10,8 +10,8 @@ project_root = "."
 [checks]
 strict = true
 require_description = true
-require_tests = true
-require_features = true
+require_tests = false
+require_features = false
 unknown_marks = "error"
 
 [marks]

@@ -1,10 +1,10 @@
 ---
 id: TASKNEST-12
 title: Add Python and TypeScript conformance suite
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-15T00:46:00Z'
-updated_date: '2026-11-15T00:47:00Z'
+updated_date: '2026-11-15T16:40:00Z'
 labels:
   - task
 milestone: m-3
@@ -23,6 +23,6 @@ Define shared behavior scenarios and runtime-specific tests for each implementat
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Both runners pass shared contract fixtures
-- [ ] #2 Any intentional differences are documented
+- [x] #1 Both runners pass shared contract fixtures
+- [x] #2 Any intentional differences are documented
 <!-- AC:END -->

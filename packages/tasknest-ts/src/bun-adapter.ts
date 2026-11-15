@@ -3,6 +3,8 @@ import {
   type RuntimeAdapter,
   type RuntimeSpawnResult,
   type SpawnOptions,
+  type WatchHandle,
+  watchPathWithNodeFs,
 } from "@/src/adapter";
 import { NotImplementedError } from "@/src/errors";
 
@@ -86,6 +88,9 @@ export function createBunAdapter(): RuntimeAdapter {
           spawnError,
         };
       }
+    },
+    watchPath(targetPath: string, onChange: (filename: string | null) => void): WatchHandle {
+      return watchPathWithNodeFs(targetPath, onChange);
     },
   };
 }

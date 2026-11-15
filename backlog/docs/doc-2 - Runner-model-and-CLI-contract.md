@@ -7,7 +7,7 @@ created_date: '2026-11-15T00:46:00Z'
 
 # Runner model and CLI contract
 
-This document defines the **normative M1/M3 contract** for Tasknest task registration, discovery, dependency resolution, execution context, and CLI parsing, and explicitly separates deferred proposals from accepted behavior.
+This document defines the **normative M1–M4 contract** for Tasknest task registration, discovery, dependency resolution, execution context, caching, parallelism, watch mode, reporting, and CLI parsing, and explicitly separates deferred proposals from accepted behavior.
 
 > **Security notice:** Discovering tasks imports task source files and executes top-level Python or TypeScript code. Discovery is **not** a sandbox; run Tasknest only on trusted repositories.
 
@@ -71,7 +71,9 @@ tasknest [GLOBAL OPTIONS] <command> [ARGS...]
   - `help [task path...]` — show global help, or detailed help for a task.
   - `check` — discover tasks, validate registrations, parameter types, dependencies, and cycles without executing tasks.
   - `plan <task path...>` — resolve and display the sequential execution order without executing tasks.
-  - `run <task path...> [task options/args]` — validate, resolve dependencies, and execute tasks sequentially.
+  - `run [RUN FLAGS] <task path...> [task options/args]` — validate, resolve dependencies, and execute tasks (with optional `--jobs`/`-j <n>`, `--fail-fast`, `--force`, `--no-cache`, `--json`, `--report <path>`, `--changed-base <ref>`, `--changed <path>`, `--all`, `--mark <name>`).
+  - `watch [WATCH FLAGS] <task path...>` — monitor declared `inputs` across the resolved DAG (ignoring own declared `outputs`) and re-run only the minimal dirty subgraph (`--interval <ms>`, `--max-cycles <n>`, `--jobs`/`-j <n>`, `--json`).
+  - `skill` — check (`--check`) or write (`--write`, `--force`) generated agent `SKILL.md`.
 - **Task-path resolution and positional conflict rule:**
   - Task options do **not** require a `--` separator before them (`tasknest run lint --path src --fix`).
   - Non-flag tokens after `help` / `plan` / `run` up to the first `-`/`--` option or `--` separator are matched by **longest registered task-path prefix** (a single canonical dotted token such as `check.dev` is also accepted).
@@ -89,18 +91,23 @@ tasknest [GLOBAL OPTIONS] <command> [ARGS...]
 - Each shared prerequisite executes **at most once** per invocation.
 - If a prerequisite fails (`ToolError` or unhandled exception), execution stops along dependent branches, reports the failed task and all downstream **blocked** tasks, and exits with code `1`.
 
-## 6. Execution context (`ToolContext`)
+## 6. Execution context (`ToolContext`), data passing, caching, and reporting (M4)
 
-- `ToolContext` exposes `repo_root` (workspace root), `project_root` (configured root for the task's discovery entry), `task_name`, `verbose`, and `run(...)`.
+- `ToolContext` exposes `repo_root`, `project_root`, `task_name`, `verbose`, `deps`, `affected`, `run(...)`, `output(...)`, and task-local environment helpers (`env`, `set_env`/`setEnv`, `unset_env`/`unsetEnv`, `scoped_env`/`withEnv`).
 - `ctx.run(argv, *, cwd=None, env=None, timeout=None, check=True, capture=False) -> CommandResult`:
   - Accepts an explicit `argv` sequence and executes **without a shell** (`shell=False`). Passing a raw string raises `ToolError`.
   - Defaults `cwd` to `ctx.project_root` when omitted.
-  - Merges `env` overrides on top of the inherited environment when provided.
+  - Merges `env` overrides on top of the task-local environment without mutating global `os.environ` or `process.env`.
   - Raises `ToolError` on nonzero exit (`check=True`), timeout, or missing executable.
+- `ctx.output(value, ...)` validates immediately (JSON default across `tasknest-py` and `tasknest-ts`; opt-in local-only `pickle` in Python) and commits on task success; downstream tasks read declared dependency outputs via read-only `ctx.deps["<canonical>"]`.
+- Opt-in caching (`cache=True` with declared `inputs`, `outputs`, `env`) stores content-hashed entries under `.tasknest/cache/` (`schema_version = 1`), bypasses on `--force`/`--no-cache`, invalidates on missing/modified declared `outputs`, and supports early cutoff via upstream `ctx.output` digests.
+- Opt-in parallel scheduling (`--jobs N`) enforces `resources` conflict locking, bounds workers via `TASKNEST_WORKER_BUDGET`, blocks dependents of failed tasks, and cancels unstarted work on `--fail-fast`.
+- `--json` emits a pure versioned JSON report (`schema_version = 1`) on stdout while routing task/subprocess stdout to stderr; `--report <path>` writes the redacted report to disk.
+- `ctx.affected` exposes `AffectedContext` (`available`, `complete`, `base_ref`, `target_ref`, `reason`, `files[]` with `path`, `old_path`, `status`); git comparisons compare `base_ref` (default `HEAD`) against `WORKTREE` (with `--include-untracked` enabled by default).
 
-## 7. Deferred / open proposals (outside M1)
+## 7. Deferred / open proposals
 
 - Short CLI alias (e.g. `tg`) — deferred.
-- Strict structural policy enforcement (`[checks]` in `tasknest.toml`), mark filtering (`--mark`), and built-in ecosystem adapters — `M2`.
-- Native TypeScript runner (`Bun` and `Node.js` adapters) and cross-language conformance fixtures — `M3`.
-- Parallel scheduler (`jobs > 1`), affected selection (`ctx.affected` + conservative selectors), machine-readable JSON reports, `ctx.output(...)` / `ctx.deps[...]` / `ctx.env(...)`, opt-in output caching (`.tasknest/cache/`), and DAG-aware `watch` mode — `M4`.
+- Strict structural policy enforcement (`[checks]` in `tasknest.toml`), mark filtering (`--mark`), and built-in ecosystem adapters — implemented in `M2`.
+- Native TypeScript runner (`Bun` and `Node.js` adapters) and cross-language conformance fixtures — implemented in `M3`.
+- Parallel scheduler (`jobs > 1`), affected selection (`ctx.affected` + conservative selectors), machine-readable JSON reports, `ctx.output(...)` / `ctx.deps[...]` / `ctx.env(...)`, opt-in output caching (`.tasknest/cache/`), and DAG-aware `watch` mode — implemented in `M4`.

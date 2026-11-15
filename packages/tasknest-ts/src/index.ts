@@ -7,6 +7,7 @@ export {
   type RuntimeName,
   type RuntimeSpawnResult,
   type SpawnOptions,
+  type WatchHandle,
 } from "@/src/adapter";
 export {
   type AffectedTestPlan,
@@ -19,7 +20,31 @@ export {
   selectAffectedTargets,
   ToolAdapter,
 } from "@/src/adapters";
+export {
+  AffectedContext,
+  type AffectedContextData,
+  buildTsReverseMap,
+  type ChangedFile,
+  type ChangeStatus,
+  collectGitChanges,
+  DEFAULT_ALWAYS_FULL,
+  normalizeRelPath,
+  parseGitNameStatus,
+  type SelectionPolicy,
+  selectConservativeTargets,
+} from "@/src/affected";
 export { createBunAdapter } from "@/src/bun-adapter";
+export {
+  type CacheContext,
+  type CacheLookup,
+  type CacheMode,
+  type CacheStatus,
+  computeFullKey,
+  computeStaticKey,
+  expandInputHashes,
+  lookupCache,
+  storeCache,
+} from "@/src/cache";
 export { type RunCliOptions, runCli } from "@/src/cli";
 export {
   type ChecksConfig,
@@ -32,7 +57,12 @@ export {
   type UnknownMarkMode,
 } from "@/src/config";
 export {
+  type BufferedOutput,
   CommandResult,
+  canonicalJsonString,
+  OUTPUT_FORMAT_JSON,
+  type OutputOptions,
+  type RecordedCommand,
   type RunOptions,
   ToolContext,
   type ToolContextOptions,
@@ -54,6 +84,7 @@ export {
   ValidationError,
 } from "@/src/errors";
 export {
+  computeWorkerBudget,
   type ExecutePlanOptions,
   type ExecutionReport,
   executeOrder,
@@ -62,6 +93,19 @@ export {
   validateGraph,
 } from "@/src/graph";
 export { createNodeAdapter } from "@/src/node-adapter";
+export {
+  buildJsonReport,
+  REDACTED_PLACEHOLDER,
+  REPORT_SCHEMA_VERSION,
+  type ReportMetadata,
+  redactArgv,
+  redactText,
+  serializeJsonReport,
+  serializeTaskRecord,
+  type TaskRunRecord,
+  type TaskStatus,
+  writeJsonReport,
+} from "@/src/report";
 export {
   checkSkill,
   DEFAULT_SKILL_TEMPLATE,
@@ -96,3 +140,4 @@ export {
   validateRegistry,
 } from "@/src/validation";
 export { VERSION, version } from "@/src/version";
+export { type WatchConfig, type WatchCycle, WatchSession } from "@/src/watch";

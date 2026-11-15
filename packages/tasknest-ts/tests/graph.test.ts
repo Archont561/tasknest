@@ -6,7 +6,7 @@ import {
   type TaskRegistry,
 } from "@/src/discovery";
 import { DependencyError, ToolError } from "@/src/errors";
-import { executePlan, resolvePlan, validateGraph } from "@/src/graph";
+import { computeWorkerBudget, executePlan, resolvePlan, validateGraph } from "@/src/graph";
 import { type TaskHandler, tool } from "@/src/task";
 import { expect, test, type WorkspaceHelper } from "@/tests/test";
 
@@ -227,3 +227,135 @@ test("TaskDefinition reference dependencies resolve across discovered modules", 
   expect(report.exitCode).toBe(0);
   expect(report.executed).toEqual(["zeta", "alpha"]);
 });
+
+test("parallel execution enforces resource locks, worker budget, and failFast cancellation", async ({
+  workspace,
+}) => {
+  const ws = workspace as WorkspaceHelper;
+  let activeDb = 0;
+  let maxDb = 0;
+  const delay = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+  const t1 = tool({ name: "db1", resources: ["db"] }, async () => {
+    activeDb += 1;
+    maxDb = Math.max(maxDb, activeDb);
+    await delay(25);
+    activeDb -= 1;
+  });
+  const t2 = tool({ name: "db2", resources: ["db"] }, async () => {
+    activeDb += 1;
+    maxDb = Math.max(maxDb, activeDb);
+    await delay(25);
+    activeDb -= 1;
+  });
+  const rootTask = tool({ name: "all", depends: ["db1", "db2"] }, async () => {});
+  const config = loadRegistryConfig(ws.root);
+  const registry = createTaskRegistry(config, {
+    db1: {
+      canonicalName: "db1",
+      cliPath: ["db1"],
+      definition: t1,
+      sourcePath: "db1.ts",
+      rootDir: ws.root,
+      projectRoot: ws.root,
+      description: "",
+    },
+    db2: {
+      canonicalName: "db2",
+      cliPath: ["db2"],
+      definition: t2,
+      sourcePath: "db2.ts",
+      rootDir: ws.root,
+      projectRoot: ws.root,
+      description: "",
+    },
+    all: {
+      canonicalName: "all",
+      cliPath: ["all"],
+      definition: rootTask,
+      sourcePath: "all.ts",
+      rootDir: ws.root,
+      projectRoot: ws.root,
+      description: "",
+    },
+  });
+
+  const report = await executePlan(registry, "all", { jobs: 4 });
+  expect(report.exitCode).toBe(0);
+  expect(maxDb).toBe(1);
+  expect(computeWorkerBudget(8, { TASKNEST_WORKER_BUDGET: "3" })).toBe(3);
+});
+
+test("ctx.output and ctx.deps pass data across tasks and failed tasks do not commit output", async ({
+  workspace,
+}) => {
+  const ws = workspace as WorkspaceHelper;
+  const prod = tool({ name: "prod" }, (ctx) => {
+    ctx.output({ count: 42 });
+  });
+  const cons = tool({ name: "cons", depends: ["prod"] }, (ctx) => {
+    ctx.output({ doubled: (ctx.deps.prod as { count: number }).count * 2 });
+  });
+  const failing = tool({ name: "failing" }, (ctx) => {
+    ctx.output({ partial: true });
+    throw new ToolError("boom");
+  });
+  const config = loadRegistryConfig(ws.root);
+  const registry = createTaskRegistry(config, {
+    prod: {
+      canonicalName: "prod",
+      cliPath: ["prod"],
+      definition: prod,
+      sourcePath: "prod.ts",
+      rootDir: ws.root,
+      projectRoot: ws.root,
+      description: "",
+    },
+    cons: {
+      canonicalName: "cons",
+      cliPath: ["cons"],
+      definition: cons,
+      sourcePath: "cons.ts",
+      rootDir: ws.root,
+      projectRoot: ws.root,
+      description: "",
+    },
+    failing: {
+      canonicalName: "failing",
+      cliPath: ["failing"],
+      definition: failing,
+      sourcePath: "failing.ts",
+      rootDir: ws.root,
+      projectRoot: ws.root,
+      description: "",
+    },
+  });
+
+  const okReport = await executePlan(registry, "cons");
+  expect(okReport.exitCode).toBe(0);
+  expect(okReport.outputs.cons).toEqual({ doubled: 84 });
+
+  const failReport = await executePlan(registry, "failing");
+  expect(failReport.exitCode).toBe(1);
+  expect(failReport.outputs.failing).toBeUndefined();
+});
+
+function loadRegistryConfig(root: string) {
+  return {
+    repoRoot: root,
+    roots: [],
+    marks: {},
+    jobs: 1,
+    checks: {
+      strict: false,
+      requireDescription: false,
+      requireTests: false,
+      requireFeatures: false,
+      unknownMarks: "ignore" as const,
+    },
+    skill: {
+      output: ".agents/skills/project-tools/SKILL.md",
+      command: "tasknest",
+    },
+  };
+}

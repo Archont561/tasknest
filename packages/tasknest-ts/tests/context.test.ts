@@ -1,7 +1,7 @@
 import { CommandResult, ToolContext } from "@/src/context";
 import { ToolError } from "@/src/errors";
 import { createNodeAdapter } from "@/src/node-adapter";
-import { test, type WorkspaceHelper } from "@/tests/test";
+import { expect, test, type WorkspaceHelper } from "@/tests/test";
 
 test
   .scenario("Command defaults to projectRoot when repoRoot differs")
@@ -132,3 +132,61 @@ test
       assert(missingErr).toBeInstanceOf(ToolError);
     },
   );
+
+test("ctx.output validates JSON serializability immediately and buffers until commit", ({
+  workspace,
+}) => {
+  const ws = workspace as WorkspaceHelper;
+  const ctx = new ToolContext({
+    repoRoot: ws.root,
+    projectRoot: ws.root,
+    taskName: "producer",
+  });
+  expect(() => ctx.output(undefined)).toThrow(ToolError);
+  expect(() => ctx.output({ bad: Number.NaN })).toThrow(ToolError);
+  ctx.output({ b: 2, a: 1 });
+  const committed = ctx.commitOutput();
+  expect(committed).toBeDefined();
+  expect(committed?.serialized).toBe('{"a":1,"b":2}');
+});
+
+test("ctx.deps restricts reads to declared dependencies and is read-only", ({ workspace }) => {
+  const ws = workspace as WorkspaceHelper;
+  const ctx = new ToolContext({
+    repoRoot: ws.root,
+    projectRoot: ws.root,
+    taskName: "consumer",
+    declaredDeps: ["prep", "silent"],
+    depsOutputs: { prep: { artifact: "dist/out.js" } },
+  });
+  expect(ctx.deps.prep).toEqual({ artifact: "dist/out.js" });
+  expect(ctx.deps.silent).toBeUndefined();
+  expect(() => ctx.deps.undeclared).toThrow(ToolError);
+  expect(() => {
+    (ctx.deps as Record<string, unknown>).prep = "mutated";
+  }).toThrow(ToolError);
+});
+
+test("ctx.env, setEnv, unsetEnv, and withEnv isolate task-local env without mutating process.env", async ({
+  workspace,
+}) => {
+  const ws = workspace as WorkspaceHelper;
+  const before = process.env.TASKNEST_LOCAL_ONLY;
+  const ctx = new ToolContext({
+    repoRoot: ws.root,
+    projectRoot: ws.root,
+    taskName: "env-local",
+    env: { BASE_KEY: "base" },
+  });
+  expect(ctx.env("BASE_KEY")).toBe("base");
+  ctx.setEnv("TASKNEST_LOCAL_ONLY", "scoped");
+  expect(ctx.env("TASKNEST_LOCAL_ONLY")).toBe("scoped");
+  expect(process.env.TASKNEST_LOCAL_ONLY).toBe(before);
+  await ctx.withEnv({ TASKNEST_LOCAL_ONLY: "inner" }, () => {
+    expect(ctx.env("TASKNEST_LOCAL_ONLY")).toBe("inner");
+  });
+  expect(ctx.env("TASKNEST_LOCAL_ONLY")).toBe("scoped");
+  ctx.unsetEnv("TASKNEST_LOCAL_ONLY");
+  expect(ctx.env("TASKNEST_LOCAL_ONLY", "fallback")).toBe("fallback");
+  expect(ctx.accessedEnvKeys()).toEqual(["BASE_KEY", "TASKNEST_LOCAL_ONLY"]);
+});

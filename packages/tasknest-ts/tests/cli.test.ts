@@ -172,3 +172,64 @@ test.prop(
   },
   { numRuns: 8 },
 );
+
+test("CLI --json emits pure machine-readable report and --report writes JSON artifact", async ({
+  workspace,
+}) => {
+  const ws = workspace as WorkspaceHelper;
+  ws.writeToml({ discovery: { roots: [{ path: "tools", namespace: "" }] } });
+  ws.writeFile(
+    "tools/noisy.ts",
+    `import { tool } from ${JSON.stringify(TASKNEST_SRC)};\n` +
+      `export default tool({ name: "noisy", description: "Prints noisy output." }, async (ctx) => {\n` +
+      `  console.log("NOISY_CONSOLE_LINE");\n` +
+      `  ctx.run([process.execPath, "-e", "process.stdout.write('SUBPROC_OUT')"]);\n` +
+      `  ctx.output({ ok: true });\n` +
+      `});\n`,
+  );
+
+  const reportFile = join(ws.root, "out", "report.json");
+  const res = await invokeCli(
+    ["--root", ws.root, "run", "--json", "--report", reportFile, "--changed", "src/a.ts", "noisy"],
+    ws,
+  );
+  expect(res.code).toBe(0);
+  const parsed = JSON.parse(res.stdout) as {
+    schema_version: number;
+    runner: string;
+    status: string;
+    affected?: { available: boolean; files: { path: string }[] };
+    tasks: { name: string; status: string; output_hash: string | null }[];
+  };
+  expect(parsed.schema_version).toBe(1);
+  expect(parsed.runner).toBe("typescript");
+  expect(parsed.status).toBe("passed");
+  expect(parsed.affected?.available).toBe(true);
+  expect(parsed.affected?.files[0]?.path).toBe("src/a.ts");
+  expect(parsed.tasks[0]?.name).toBe("noisy");
+  expect(parsed.tasks[0]?.output_hash).toBeTruthy();
+  expect(res.stderr).toContain("NOISY_CONSOLE_LINE");
+  expect(res.stderr).toContain("SUBPROC_OUT");
+
+  const diskReport = JSON.parse(readFileSync(reportFile, "utf-8")) as { schema_version: number };
+  expect(diskReport.schema_version).toBe(1);
+});
+
+test("CLI watch subcommand runs bounded cycle and emits JSON output", async ({ workspace }) => {
+  const ws = workspace as WorkspaceHelper;
+  ws.writeToml({ discovery: { roots: [{ path: "tools", namespace: "" }] } });
+  ws.writeFile("src/in.txt", "hello\n");
+  ws.writeFile(
+    "tools/build.ts",
+    `import { tool } from ${JSON.stringify(TASKNEST_SRC)};\n` +
+      `export default tool({ name: "build", inputs: ["src/in.txt"] }, async () => {});\n`,
+  );
+  const res = await invokeCli(
+    ["--root", ws.root, "watch", "--interval", "50", "--max-cycles", "1", "--json", "build"],
+    ws,
+  );
+  expect(res.code).toBe(0);
+  const cycle = JSON.parse(res.stdout.trim()) as { cycle: number; executed: string[] };
+  expect(cycle.cycle).toBe(1);
+  expect(cycle.executed).toEqual(["build"]);
+});

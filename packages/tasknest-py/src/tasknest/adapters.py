@@ -4,9 +4,17 @@ from __future__ import annotations
 
 import shutil
 import sys
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from tasknest.affected import (
+    AffectedContext,
+    ChangedFile,
+    SelectionPolicy,
+    select_conservative_targets,
+)
+from tasknest.affected import (
+    AffectedTestPlan as AffectedTestPlan,
+)
 from tasknest.errors import ToolError
 
 if TYPE_CHECKING:
@@ -14,14 +22,6 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from tasknest.context import CommandResult, ToolContext
-
-
-@dataclass(frozen=True)
-class AffectedTestPlan:
-    """Selection plan produced by conservative affected test lookup."""
-
-    targets: tuple[str, ...]
-    fallback_reason: str | None = None
 
 
 def find_executable(name: str) -> str | None:
@@ -41,31 +41,20 @@ def require_executable(name: str) -> str:
 
 
 def select_pytest_targets(
-    changed_files: Sequence[str],
+    changed_files: AffectedContext | Sequence[ChangedFile | str],
     mapping: Mapping[str, Sequence[str]] | None,
     *,
     default_target: str = "tests",
     always_full: Sequence[str] = ("pyproject.toml", "conftest.py", "tests/conftest.py"),
+    force_all: bool = False,
 ) -> AffectedTestPlan:
     """Select affected pytest targets or fall back conservatively to default_target."""
-    if mapping is None:
-        return AffectedTestPlan((default_target,), "no source-to-test mapping provided")
-    if not changed_files:
-        return AffectedTestPlan((), None)
-    selected: list[str] = []
-    seen: set[str] = set()
-    for rel in changed_files:
-        norm = rel.replace("\\", "/")
-        if norm in always_full or norm.endswith("/conftest.py"):
-            return AffectedTestPlan((default_target,), f"global trigger changed: {norm}")
-        mapped = mapping.get(norm)
-        if not mapped:
-            return AffectedTestPlan((default_target,), f"unmapped change: {norm}")
-        for target in mapped:
-            if target not in seen:
-                seen.add(target)
-                selected.append(target)
-    return AffectedTestPlan(tuple(selected), None)
+    policy = SelectionPolicy(
+        default_target=default_target,
+        always_full=always_full,
+        force_all=force_all,
+    )
+    return select_conservative_targets(changed_files, mapping, policy)
 
 
 class ToolAdapter:

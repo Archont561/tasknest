@@ -1,12 +1,15 @@
 import { existsSync } from "node:fs";
 import { delimiter, join } from "node:path";
+import {
+  type AffectedContext,
+  type AffectedTestPlan,
+  type ChangedFile,
+  selectConservativeTargets,
+} from "@/src/affected";
 import type { CommandResult, RunOptions, ToolContext } from "@/src/context";
 import { ToolError } from "@/src/errors";
 
-export interface AffectedTestPlan {
-  readonly targets: readonly string[];
-  readonly fallbackReason?: string;
-}
+export type { AffectedTestPlan } from "@/src/affected";
 
 export function findExecutable(
   name: string,
@@ -39,40 +42,21 @@ export function requireExecutable(name: string): string {
 }
 
 export function selectAffectedTargets(
-  changedFiles: readonly string[],
+  changes: AffectedContext | readonly (ChangedFile | string)[],
   mapping: Readonly<Record<string, readonly string[]>> | undefined,
   options: {
     readonly defaultTarget?: string;
     readonly alwaysFull?: readonly string[];
+    readonly forceAll?: boolean;
+    readonly strict?: boolean;
   } = {},
 ): AffectedTestPlan {
-  const defaultTarget = options.defaultTarget ?? "tests";
-  const alwaysFull = options.alwaysFull ?? ["package.json", "tsconfig.json", "bun.lock"];
-  if (mapping === undefined) {
-    return { targets: [defaultTarget], fallbackReason: "no source-to-test mapping provided" };
-  }
-  if (changedFiles.length === 0) {
-    return { targets: [] };
-  }
-  const selected: string[] = [];
-  const seen = new Set<string>();
-  for (const rel of changedFiles) {
-    const norm = rel.replaceAll("\\", "/");
-    if (alwaysFull.includes(norm)) {
-      return { targets: [defaultTarget], fallbackReason: `global trigger changed: ${norm}` };
-    }
-    const mapped = mapping[norm];
-    if (!mapped || mapped.length === 0) {
-      return { targets: [defaultTarget], fallbackReason: `unmapped change: ${norm}` };
-    }
-    for (const target of mapped) {
-      if (!seen.has(target)) {
-        seen.add(target);
-        selected.push(target);
-      }
-    }
-  }
-  return { targets: selected };
+  return selectConservativeTargets(changes, mapping, {
+    ...(options.defaultTarget !== undefined ? { defaultTarget: options.defaultTarget } : {}),
+    alwaysFull: options.alwaysFull ?? ["package.json", "tsconfig.json", "bun.lock"],
+    forceAll: options.forceAll ?? false,
+    strict: options.strict ?? false,
+  });
 }
 
 export abstract class ToolAdapter {
@@ -97,11 +81,38 @@ export class BunAdapter extends ToolAdapter {
 
   test(
     targets: readonly string[] = [],
-    options: { readonly coverage?: boolean } = {},
+    options: { readonly coverage?: boolean; readonly forceAll?: boolean } = {},
   ): CommandResult {
     const exe = this.checkAvailable();
     const argv = [exe, "test", ...(options.coverage ? ["--coverage"] : []), ...targets];
     return this.exec(argv);
+  }
+
+  runAffected(
+    changes: AffectedContext | readonly (ChangedFile | string)[],
+    mapping?: Readonly<Record<string, readonly string[]>>,
+    options: {
+      readonly defaultTarget?: string;
+      readonly forceAll?: boolean;
+      readonly strict?: boolean;
+      readonly capture?: boolean;
+    } = {},
+  ): { readonly plan: AffectedTestPlan; readonly result?: CommandResult } {
+    const plan = selectAffectedTargets(changes, mapping, {
+      defaultTarget: options.defaultTarget ?? "tests",
+      alwaysFull: ["package.json", "tsconfig.json", "bun.lock"],
+      forceAll: options.forceAll ?? false,
+      strict: options.strict ?? false,
+    });
+    if (plan.targets.length === 0) {
+      return { plan };
+    }
+    const exe = this.checkAvailable();
+    const result = this.exec(
+      [exe, "test", ...plan.targets],
+      options.capture !== undefined ? { capture: options.capture } : {},
+    );
+    return { plan, result };
   }
 }
 
@@ -132,13 +143,20 @@ export class PytestAdapter extends ToolAdapter {
   }
 
   runAffected(
-    changedFiles: readonly string[],
+    changes: AffectedContext | readonly (ChangedFile | string)[],
     mapping?: Readonly<Record<string, readonly string[]>>,
-    options: { readonly defaultTarget?: string; readonly capture?: boolean } = {},
+    options: {
+      readonly defaultTarget?: string;
+      readonly forceAll?: boolean;
+      readonly strict?: boolean;
+      readonly capture?: boolean;
+    } = {},
   ): { readonly plan: AffectedTestPlan; readonly result?: CommandResult } {
-    const plan = selectAffectedTargets(changedFiles, mapping, {
+    const plan = selectAffectedTargets(changes, mapping, {
       ...(options.defaultTarget !== undefined ? { defaultTarget: options.defaultTarget } : {}),
       alwaysFull: ["pyproject.toml", "conftest.py", "tests/conftest.py"],
+      forceAll: options.forceAll ?? false,
+      strict: options.strict ?? false,
     });
     if (plan.targets.length === 0) {
       return { plan };

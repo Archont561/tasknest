@@ -5,6 +5,8 @@ import {
   type RuntimeAdapter,
   type RuntimeSpawnResult,
   type SpawnOptions,
+  type WatchHandle,
+  watchPathWithNodeFs,
 } from "@/src/adapter";
 
 export function createNodeAdapter(): RuntimeAdapter {
@@ -59,6 +61,9 @@ export function createNodeAdapter(): RuntimeAdapter {
         stderr: proc.stderr ?? "",
         timedOut,
       };
+    },
+    watchPath(targetPath: string, onChange: (filename: string | null) => void): WatchHandle {
+      return watchPathWithNodeFs(targetPath, onChange);
     },
   };
 }

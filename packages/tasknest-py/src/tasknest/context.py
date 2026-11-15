@@ -1,17 +1,31 @@
-"""Execution context and argv-based subprocess helper."""
+"""Execution context, structured outputs, dependency reads, and scoped env."""
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
+import pickle
 import subprocess
+import sys
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Literal
 
+from tasknest.affected import AffectedContext
 from tasknest.errors import ToolError
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Sequence
     from pathlib import Path
+
+OutputFormat = Literal["json", "pickle"]
+
+
+def python_abi_tag() -> str:
+    """Return local Python ABI fingerprint for opt-in pickle cache keys."""
+    return f"py{sys.version_info.major}.{sys.version_info.minor}-{sys.platform}"
 
 
 @dataclass(frozen=True)
@@ -26,6 +40,57 @@ class CommandResult:
 
 
 @dataclass(frozen=True)
+class BufferedOutput:
+    """Validated structured output buffered until task completion."""
+
+    payload: Any
+    output_format: OutputFormat
+    digest: str
+    raw_bytes: bytes
+    abi_tag: str | None = None
+
+
+class DepsMapping(Mapping[str, Any]):
+    """Read-only dependency output view restricted to a task's declared depends."""
+
+    def __init__(
+        self,
+        owner_name: str,
+        allowed_deps: frozenset[str],
+        values: Mapping[str, Any],
+    ) -> None:
+        self._owner_name = owner_name
+        self._allowed_deps = allowed_deps
+        self._values = {k: values[k] for k in allowed_deps if k in values}
+
+    def __getitem__(self, key: str) -> Any:
+        if key not in self._allowed_deps:
+            raise ToolError(
+                f"Task {self._owner_name!r} cannot read ctx.deps[{key!r}]: not in declared depends."
+            )
+        if key not in self._values:
+            raise KeyError(f"Dependency {key!r} did not commit an output.")
+        return self._values[key]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._values)
+
+    def __len__(self) -> int:
+        return len(self._values)
+
+    def __contains__(self, key: object) -> bool:
+        return isinstance(key, str) and key in self._values
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """Return committed output for declared dependency key or default."""
+        if key not in self._allowed_deps:
+            raise ToolError(
+                f"Task {self._owner_name!r} cannot read ctx.deps[{key!r}]: not in declared depends."
+            )
+        return self._values.get(key, default)
+
+
+@dataclass(frozen=True)
 class _SubprocessSpec:
     args: tuple[str, ...]
     workdir: Path
@@ -35,9 +100,15 @@ class _SubprocessSpec:
     capture: bool
 
 
-def _build_env(base_env: Mapping[str, str], overrides: Mapping[str, str] | None) -> dict[str, str]:
+def _build_env(
+    task_env: Mapping[str, str],
+    unset_keys: frozenset[str],
+    overrides: Mapping[str, str] | None,
+) -> dict[str, str]:
     merged = os.environ.copy()
-    merged.update(base_env)
+    for removed in unset_keys:
+        merged.pop(removed, None)
+    merged.update(task_env)
     if overrides:
         merged.update(overrides)
     return merged
@@ -74,6 +145,37 @@ def _execute_spec(spec: _SubprocessSpec) -> CommandResult:
     return result
 
 
+def _encode_json_output(value: Any) -> BufferedOutput:
+    try:
+        raw_text = json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    except (TypeError, ValueError) as exc:
+        raise ToolError(f"ctx.output() requires JSON-serializable data: {exc}") from exc
+    raw_bytes = raw_text.encode("utf-8")
+    digest = hashlib.sha256(raw_bytes).hexdigest()
+    return BufferedOutput(
+        payload=json.loads(raw_text),
+        output_format="json",
+        digest=digest,
+        raw_bytes=raw_bytes,
+    )
+
+
+def _encode_pickle_output(value: Any) -> BufferedOutput:
+    try:
+        raw_bytes = pickle.dumps(value)
+    except Exception as exc:
+        raise ToolError(f"ctx.output(format='pickle') failed to serialize value: {exc}") from exc
+    abi = python_abi_tag()
+    digest = hashlib.sha256(abi.encode("utf-8") + b":" + raw_bytes).hexdigest()
+    return BufferedOutput(
+        payload=value,
+        output_format="pickle",
+        digest=digest,
+        raw_bytes=raw_bytes,
+        abi_tag=abi,
+    )
+
+
 @dataclass
 class ToolContext:
     """Runtime execution context passed to tasks."""
@@ -83,6 +185,87 @@ class ToolContext:
     task_name: str
     verbose: bool = False
     base_env: Mapping[str, str] = field(default_factory=dict)
+    deps: DepsMapping = field(default_factory=lambda: DepsMapping("", frozenset(), {}))
+    affected: AffectedContext = field(default_factory=AffectedContext)
+    quiet_stdout: bool = False
+    _task_env: dict[str, str] = field(init=False, repr=False)
+    _unset_env: set[str] = field(init=False, repr=False, default_factory=set)
+    _accessed_env: set[str] = field(init=False, repr=False, default_factory=set)
+    _pending_output: BufferedOutput | None = field(init=False, repr=False, default=None)
+    _commands: list[CommandResult] = field(init=False, repr=False, default_factory=list)
+
+    def __post_init__(self) -> None:
+        self._task_env = dict(self.base_env)
+
+    def output(self, value: Any, *, format: OutputFormat = "json") -> str:  # noqa: A002
+        """Buffer a validated structured output for commit on task success."""
+        if format == "json":
+            encoded = _encode_json_output(value)
+        elif format == "pickle":
+            encoded = _encode_pickle_output(value)
+        else:
+            raise ToolError(
+                f"Unsupported ctx.output format {format!r}; expected 'json' or 'pickle'."
+            )
+        self._pending_output = encoded
+        return encoded.digest
+
+    def env(self, name: str, default: str | None = None) -> str | None:
+        """Read an environment variable from task-local env over process env and track key."""
+        self._accessed_env.add(name)
+        if name in self._task_env:
+            return self._task_env[name]
+        if name in self._unset_env:
+            return default
+        return os.environ.get(name, default)
+
+    def set_env(self, name: str, value: str) -> None:
+        """Set a task-local environment variable without mutating os.environ."""
+        self._unset_env.discard(name)
+        self._task_env[name] = value
+
+    def unset_env(self, name: str) -> None:
+        """Unset a task-local environment variable without mutating os.environ."""
+        self._task_env.pop(name, None)
+        self._unset_env.add(name)
+
+    @contextmanager
+    def scoped_env(self, **updates: str | None) -> Iterator[None]:
+        """Temporarily apply task-local env overrides for a with-block."""
+        prev_env = dict(self._task_env)
+        prev_unset = set(self._unset_env)
+        for key, value in updates.items():
+            if value is None:
+                self.unset_env(key)
+            else:
+                self.set_env(key, value)
+        try:
+            yield
+        finally:
+            self._task_env = prev_env
+            self._unset_env = prev_unset
+
+    def accessed_env_snapshot(self) -> dict[str, str | None]:
+        """Return resolved values for all env keys queried via ctx.env()."""
+        snapshot: dict[str, str | None] = {}
+        for key in sorted(self._accessed_env):
+            if key in self._task_env:
+                snapshot[key] = self._task_env[key]
+            elif key in self._unset_env:
+                snapshot[key] = None
+            else:
+                snapshot[key] = os.environ.get(key)
+        return snapshot
+
+    def consume_pending_output(self) -> BufferedOutput | None:
+        """Return and clear any buffered ctx.output payload."""
+        pending = self._pending_output
+        self._pending_output = None
+        return pending
+
+    def recorded_commands(self) -> tuple[CommandResult, ...]:
+        """Return commands executed through ctx.run during this task invocation."""
+        return tuple(self._commands)
 
     def run(
         self,
@@ -105,9 +288,23 @@ class ToolContext:
         spec = _SubprocessSpec(
             args=tuple(str(part) for part in argv),
             workdir=workdir,
-            env=_build_env(self.base_env, env),
+            env=_build_env(self._task_env, frozenset(self._unset_env), env),
             timeout=timeout,
             check=check,
-            capture=capture,
+            capture=capture or self.quiet_stdout,
         )
-        return _execute_spec(spec)
+        try:
+            result = _execute_spec(spec)
+        except ToolError as exc:
+            self._commands.append(
+                CommandResult(
+                    argv=spec.args,
+                    returncode=exc.exit_code,
+                    stdout="",
+                    stderr=str(exc),
+                    cwd=spec.workdir,
+                )
+            )
+            raise
+        self._commands.append(result)
+        return result

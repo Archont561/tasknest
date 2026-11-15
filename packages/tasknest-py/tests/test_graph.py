@@ -241,3 +241,82 @@ def test_property_dag_topological_and_single_execution(
         report = run_plan(registry, target, {})
         assert report.exit_code == 0
         assert report.succeeded == order
+
+
+def test_parallel_scheduler_respects_resources_worker_budget_and_fail_fast(tmp_path: Path) -> None:
+    from tasknest.graph import RunOptions
+
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    (tools / "base.py").write_text(
+        "from tasknest import ToolContext, tool\n"
+        "@tool()\n"
+        "def base(ctx: ToolContext) -> None:\n"
+        "    ctx.output({'ready': True})\n",
+        encoding="utf-8",
+    )
+    (tools / "db_one.py").write_text(
+        "import time\n"
+        "from pathlib import Path\n"
+        "from tasknest import ToolContext, tool\n"
+        "@tool(depends=['base'], resources=['db'])\n"
+        "def db_one(ctx: ToolContext) -> None:\n"
+        "    assert ctx.deps['base']['ready'] is True\n"
+        "    assert ctx.env('TASKNEST_WORKER_BUDGET') == '1'\n"
+        "    log = Path(ctx.project_root) / 'events.log'\n"
+        "    with log.open('a', encoding='utf-8') as f: f.write('start:db_one\\n')\n"
+        "    time.sleep(0.05)\n"
+        "    with log.open('a', encoding='utf-8') as f: f.write('end:db_one\\n')\n",
+        encoding="utf-8",
+    )
+    (tools / "db_two.py").write_text(
+        "import time\n"
+        "from pathlib import Path\n"
+        "from tasknest import ToolContext, tool\n"
+        "@tool(depends=['base'], resources=['db'])\n"
+        "def db_two(ctx: ToolContext) -> None:\n"
+        "    log = Path(ctx.project_root) / 'events.log'\n"
+        "    with log.open('a', encoding='utf-8') as f: f.write('start:db_two\\n')\n"
+        "    time.sleep(0.05)\n"
+        "    with log.open('a', encoding='utf-8') as f: f.write('end:db_two\\n')\n",
+        encoding="utf-8",
+    )
+    (tools / "join.py").write_text(
+        "from tasknest import tool\n"
+        "@tool(depends=['db_one', 'db_two'])\n"
+        "def join() -> None: pass\n",
+        encoding="utf-8",
+    )
+
+    registry = discover_tasks(tmp_path)
+    report = run_plan(registry, "join", {}, options=RunOptions(jobs=2))
+    assert report.exit_code == 0
+    assert report.jobs == 2
+    lines = (tmp_path / "events.log").read_text("utf-8").splitlines()
+    assert lines in (
+        ["start:db_one", "end:db_one", "start:db_two", "end:db_two"],
+        ["start:db_two", "end:db_two", "start:db_one", "end:db_one"],
+    )
+
+
+def test_failed_task_discards_buffered_output_and_blocks_dependents(tmp_path: Path) -> None:
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    (tools / "bad.py").write_text(
+        "from tasknest import ToolContext, ToolError, tool\n"
+        "@tool()\n"
+        "def bad(ctx: ToolContext) -> None:\n"
+        "    ctx.output({'should_not_commit': True})\n"
+        "    raise ToolError('bad failed')\n",
+        encoding="utf-8",
+    )
+    (tools / "after.py").write_text(
+        "from tasknest import tool\n@tool(depends=['bad'])\ndef after() -> None: pass\n",
+        encoding="utf-8",
+    )
+    registry = discover_tasks(tmp_path)
+    report = run_plan(registry, "after", {})
+    assert report.exit_code == 1
+    assert report.failed == ("bad",)
+    assert report.blocked == ("after",)
+    assert "bad" not in report.committed_outputs

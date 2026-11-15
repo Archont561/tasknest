@@ -15,7 +15,11 @@ _PKG_NAME = "tasknest"
 _NO_INDEX = "--no-index"
 _NO_DEPS = "--no-deps"
 _BIN = "bin"
-_SMOKE_CODE = "import tasknest; assert tasknest.__version__.endswith('.dev0'), tasknest.__version__"
+_SMOKE_CODE = (
+    "import tasknest; "
+    "assert tasknest.VERSION == tasknest.__version__ "
+    "and tasknest.VERSION.endswith('.dev0'), tasknest.VERSION"
+)
 
 
 def _run(argv: tuple[str, ...], cwd: Path, env: dict[str, str] | None = None) -> bool:

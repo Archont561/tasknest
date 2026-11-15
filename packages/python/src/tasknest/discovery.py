@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from tasknest.config import DiscoveryRoot, TasknestConfig, load_config
@@ -23,6 +23,10 @@ class TaskRegistry:
 
     config: TasknestConfig
     tasks: dict[str, TaskDefinition]
+    _by_cli: dict[tuple[str, ...], TaskDefinition] = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self._by_cli = {task.cli_path: task for task in self.tasks.values()}
 
     def resolve_path(self, tokens: tuple[str, ...] | list[str]) -> tuple[TaskDefinition, list[str]]:
         """Match the longest task-path prefix or a single canonical dotted token."""
@@ -30,11 +34,10 @@ class TaskRegistry:
             raise DiscoveryError("Missing task path.")
         if len(tokens) == 1 and tokens[0] in self.tasks:
             return self.tasks[tokens[0]], []
-        by_cli = {task.cli_path: task for task in self.tasks.values()}
         for end in range(len(tokens), 0, -1):
             candidate = tuple(tokens[:end])
-            if candidate in by_cli:
-                return by_cli[candidate], list(tokens[end:])
+            if candidate in self._by_cli:
+                return self._by_cli[candidate], list(tokens[end:])
         if _DOT in tokens[0] and tokens[0] in self.tasks:
             return self.tasks[tokens[0]], list(tokens[1:])
         raise DiscoveryError(f"Unknown task: {' '.join(tokens)}")

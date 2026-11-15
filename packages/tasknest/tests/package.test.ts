@@ -1,10 +1,14 @@
-import { readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { version } from "@/src/index";
+import { VERSION, version } from "@/src/index";
 import { expect, test } from "@/tests/test";
 
-test("exports a development version", () => {
-  expect(version).toEndWith("-dev.0");
+test("exports VERSION and version matching package.json manifest", () => {
+  const pkgPath = join(import.meta.dir, "..", "package.json");
+  const manifest = JSON.parse(readFileSync(pkgPath, "utf-8")) as { version: string };
+  expect(VERSION).toBe(manifest.version);
+  expect(version).toBe(VERSION);
+  expect(VERSION).toEndWith("-dev.0");
 });
 
 test("every source module has a matching test file", () => {

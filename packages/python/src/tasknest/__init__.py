@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from tasknest._version import VERSION, __version__
 from tasknest.config import DiscoveryRoot, TasknestConfig, load_config
 from tasknest.context import CommandResult, ToolContext
 from tasknest.discovery import TaskRegistry, discover_tasks
@@ -17,9 +18,8 @@ from tasknest.errors import (
 from tasknest.graph import ExecutionReport, plan_execution, run_plan, validate_graph
 from tasknest.task import TaskDefinition, TaskOption, tool
 
-__version__ = "0.1.0.dev0"
-
 __all__ = [
+    "VERSION",
     "CliUsageError",
     "CommandResult",
     "ConfigError",

@@ -9,7 +9,7 @@ export {
   type SpawnOptions,
 } from "@/src/adapter";
 export { createBunAdapter } from "@/src/bun-adapter";
-export { type RunCliOptions, runCli, version } from "@/src/cli";
+export { type RunCliOptions, runCli } from "@/src/cli";
 export {
   DEFAULT_CONFIG_NAME,
   type DiscoveryRoot,
@@ -60,3 +60,4 @@ export {
   type ToolConfig,
   tool,
 } from "@/src/task";
+export { VERSION, version } from "@/src/version";

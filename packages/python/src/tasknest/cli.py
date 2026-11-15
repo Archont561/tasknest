@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from tasknest import __version__
+from tasknest import VERSION
 from tasknest.discovery import TaskRegistry, discover_tasks
 from tasknest.errors import CliUsageError, DiscoveryError, TasknestError
 from tasknest.graph import plan_execution, run_plan, validate_graph
@@ -272,7 +272,7 @@ def _cmd_run(registry: TaskRegistry, rest: Sequence[str], *, is_verbose: bool) -
 
 def _dispatch(opts: _GlobalOpts) -> int:
     if opts.show_version:
-        print(f"tasknest {__version__}")
+        print(f"tasknest {VERSION}")
         return 0
     if opts.show_help or not opts.rest:
         print(_GLOBAL_USAGE, end="")

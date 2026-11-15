@@ -12,9 +12,9 @@ _CHECK_FILE = "check.ts"
 _UTF8 = "utf-8"
 _CONSUMER_PKG = '{"name": "consumer", "type": "module"}\n'
 _CONSUMER_TS = (
-    'import { version } from "tasknest";\n'
-    'if (!version.endsWith("-dev.0")) {\n'
-    "  throw new Error(`Unexpected version: ${version}`);\n"
+    'import { VERSION, version } from "tasknest";\n'
+    'if (VERSION !== version || !VERSION.endsWith("-dev.0")) {\n'
+    "  throw new Error(`Unexpected version: ${VERSION}`);\n"
     "}\n"
 )
 

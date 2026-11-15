@@ -210,8 +210,7 @@ function assignOption(values: Record<string, unknown>, option: TaskOption, raw: 
   }
 }
 
-export function parseTaskCliArgs(task: TaskDefinition, tokens: readonly string[]): ParsedTaskArgs {
-  const byFlag = new Map<string, TaskOption>(task.options.map((opt) => [opt.flagName, opt]));
+export function createDefaultArgValues(task: TaskDefinition): Record<string, unknown> {
   const values: Record<string, unknown> = {};
   for (const opt of task.options) {
     if (opt.hasDefault) {
@@ -222,6 +221,12 @@ export function parseTaskCliArgs(task: TaskDefinition, tokens: readonly string[]
       values[opt.name] = undefined;
     }
   }
+  return values;
+}
+
+export function parseTaskCliArgs(task: TaskDefinition, tokens: readonly string[]): ParsedTaskArgs {
+  const byFlag = new Map<string, TaskOption>(task.options.map((opt) => [opt.flagName, opt]));
+  const values = createDefaultArgValues(task);
 
   const positionals: string[] = [];
   let idx = 0;

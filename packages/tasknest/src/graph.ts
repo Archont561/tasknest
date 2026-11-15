@@ -1,8 +1,8 @@
 import type { RuntimeAdapter } from "@/src/adapter";
 import { ToolContext } from "@/src/context";
-import type { DiscoveredTask, TaskRegistry } from "@/src/discovery";
+import type { TaskRegistry } from "@/src/discovery";
 import { DependencyError } from "@/src/errors";
-import { isTaskDefinition, type TaskDefinition } from "@/src/task";
+import { createDefaultArgValues, isTaskDefinition, type TaskDefinition } from "@/src/task";
 
 export interface ExecutionReport {
   readonly exitCode: number;
@@ -104,20 +104,6 @@ export function resolvePlan(registry: TaskRegistry, target: string): string[] {
   return order;
 }
 
-function createDefaultArgValues(task: DiscoveredTask): Record<string, unknown> {
-  const values: Record<string, unknown> = {};
-  for (const opt of task.definition.options) {
-    if (opt.hasDefault) {
-      values[opt.name] = opt.defaultValue;
-    } else if (opt.multiple) {
-      values[opt.name] = [];
-    } else if (opt.optional) {
-      values[opt.name] = undefined;
-    }
-  }
-  return values;
-}
-
 export async function executePlan(
   registry: TaskRegistry,
   target: string,
@@ -141,7 +127,9 @@ export async function executePlan(
     });
     const isTarget = name === target;
     const args =
-      isTarget && options.targetValues ? options.targetValues : createDefaultArgValues(task);
+      isTarget && options.targetValues
+        ? options.targetValues
+        : createDefaultArgValues(task.definition);
     const positionals = isTarget && options.targetPositionals ? options.targetPositionals : [];
 
     try {

@@ -1,8 +1,16 @@
-import { createTaskRegistry, type DiscoveredTask, type TaskRegistry } from "@/src/discovery";
+import { join } from "node:path";
+import {
+  createTaskRegistry,
+  type DiscoveredTask,
+  discoverTasks,
+  type TaskRegistry,
+} from "@/src/discovery";
 import { DependencyError, ToolError } from "@/src/errors";
 import { executePlan, resolvePlan, validateGraph } from "@/src/graph";
 import { type TaskHandler, tool } from "@/src/task";
-import { expect, test } from "@/tests/test";
+import { expect, test, type WorkspaceHelper } from "@/tests/test";
+
+const TASKNEST_SRC = join(import.meta.dir, "..", "src", "index.ts");
 
 function makeRegistry(
   defs: Array<{ name: string; depends?: string[]; handler?: TaskHandler }>,
@@ -176,3 +184,26 @@ test.prop(
   },
   { numRuns: 30 },
 );
+
+test("TaskDefinition reference dependencies resolve across discovered modules", async ({
+  workspace,
+}) => {
+  const ws = workspace as WorkspaceHelper;
+  ws.writeToml({ discovery: { roots: [{ path: "tools", namespace: "" }] } });
+  ws.writeFile(
+    "tools/alpha.ts",
+    `import { tool } from ${JSON.stringify(TASKNEST_SRC)};\n` +
+      `import zeta from "./zeta.ts";\n` +
+      `export default tool({ name: "alpha", depends: [zeta] }, async () => {});\n`,
+  );
+  ws.writeFile(
+    "tools/zeta.ts",
+    `import { tool } from ${JSON.stringify(TASKNEST_SRC)};\n` +
+      `export default tool({ name: "zeta" }, async () => {});\n`,
+  );
+
+  const registry = await discoverTasks(ws.root);
+  const report = await executePlan(registry, "alpha");
+  expect(report.exitCode).toBe(0);
+  expect(report.executed).toEqual(["zeta", "alpha"]);
+});

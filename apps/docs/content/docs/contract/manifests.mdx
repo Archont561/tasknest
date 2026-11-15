@@ -1,0 +1,84 @@
+---
+title: Manifest Tasks & Packages
+description: Two-tier gradation from package.json and pyproject.toml manifests to file-based tasks, plus --package and --each CLI selectors.
+---
+
+Tasknest supports a **two-tier gradation model** for polyglot monorepos so simple package scripts work immediately without boilerplate, while complex tasks can graduate to typed Python or TypeScript files without breaking callers.
+
+## Tier 1: Manifest Tasks
+
+Enable workspace discovery or explicit manifest roots in `tasknest.toml`:
+
+```toml
+[discovery]
+workspaces = true # expands root package.json "workspaces"
+
+[[discovery.manifests]]
+path = "services/*"
+persistent_scripts = ["dev", "serve"]
+exclude_scripts = ["postinstall", "prepack"]
+```
+
+### JavaScript / TypeScript (`package.json`)
+
+- Every entry under `"scripts"` becomes `<package>.<script>` (unless listed in `exclude_scripts`).
+- Package manager is auto-detected per package (`bun.lock`/`bun.lockb` → `bun`, `pnpm-lock.yaml` → `pnpm`, `yarn.lock` → `yarn`, `package-lock.json` → `npm`), or overridden with `runner`.
+- Optional `"tasknest"` metadata in `package.json` attaches `marks`, `depends`, `requires`, `inputs`, `outputs`, `cache`, `persistent`, `env`, `resources`, or custom `cmd` argv arrays:
+
+```json
+{
+  "scripts": {
+    "build": "next build",
+    "dev": "next dev"
+  },
+  "tasknest": {
+    "tasks": {
+      "build": { "inputs": ["src/**"], "outputs": [".next/**"], "cache": true },
+      "dev": { "persistent": true, "marks": ["dev"] }
+    }
+  }
+}
+```
+
+### Python (`pyproject.toml`)
+
+Declare explicit argv arrays (no shell strings) under `[tool.tasknest.tasks]`:
+
+```toml
+[tool.tasknest.tasks]
+lint = ["ruff", "check", "src", "tests"]
+test = { cmd = ["pytest", "tests"], depends = ["lint"], marks = ["fast"] }
+```
+
+Unqualified dependency names (`depends = ["lint"]`) resolve first inside the same package (`<package>.lint`), falling back to global task names.
+
+## Tier 2: File Overrides
+
+Manifest tasks load **before** `[[discovery.roots]]` file tasks. Any file task (`tools/<pkg>/<name>.py` or `.ts`) with the same canonical name **cleanly overrides** the Tier 1 manifest task while keeping all downstream dependencies intact:
+
+```text
+apps/web/package.json  →  web.build (Tier 1 manifest)
+tools/web/build.py     →  web.build (Tier 2 file override)
+```
+
+Duplicate Tier 2 files across roots still fail discovery with an error. Manifest tasks also skip `require_tests` and `require_features` checks unless graduated to a Tier 2 file.
+
+## Package & Cross-Package CLI Selection
+
+Use `--package` / `-p` (repeatable) and `--each <task>` across `ls`, `plan`, and `run`:
+
+```sh
+# List tasks in one package
+tasknest ls -p web
+
+# Run a single package-scoped task (short form)
+tasknest run -p web build
+
+# Plan or run matching tasks across all packages
+tasknest plan --each test
+tasknest run --each test
+
+# Combine package and task/mark filters
+tasknest run -p web -p api --each lint
+tasknest run -p web --mark fast
+```

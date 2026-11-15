@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from tasknest.cache import expand_input_hashes
+from tasknest.errors import ValidationError
 from tasknest.graph import ExecutionReport, RunOptions, plan_execution, run_order, validate_graph
 
 if TYPE_CHECKING:
@@ -95,6 +96,11 @@ class WatchSession:
     def __post_init__(self) -> None:
         self.deps_map = validate_graph(self.registry)
         self.order = plan_execution(self.registry, self.target_name)
+        for name in self.order:
+            if self.registry.tasks[name].persistent:
+                raise ValidationError(
+                    f"Cannot use 'watch' on persistent task {name!r}; run it directly instead."
+                )
 
     def _capture_all_inputs(self) -> dict[str, tuple[tuple[str, str], ...]]:
         snapshots: dict[str, tuple[tuple[str, str], ...]] = {}

@@ -6,7 +6,13 @@ import {
   type TaskRegistry,
 } from "@/src/discovery";
 import { DependencyError, ToolError } from "@/src/errors";
-import { computeWorkerBudget, executePlan, resolvePlan, validateGraph } from "@/src/graph";
+import {
+  computeWorkerBudget,
+  executeOrder,
+  executePlan,
+  resolvePlan,
+  validateGraph,
+} from "@/src/graph";
 import { type TaskHandler, tool } from "@/src/task";
 import { expect, test, type WorkspaceHelper } from "@/tests/test";
 
@@ -34,6 +40,8 @@ function makeRegistry(
     {
       repoRoot: ".",
       roots: [],
+      manifests: [],
+      workspaces: false,
       marks: {},
       jobs: 1,
       checks: {
@@ -344,6 +352,8 @@ function loadRegistryConfig(root: string) {
   return {
     repoRoot: root,
     roots: [],
+    manifests: [],
+    workspaces: false,
     marks: {},
     jobs: 1,
     checks: {
@@ -359,3 +369,68 @@ function loadRegistryConfig(root: string) {
     },
   };
 }
+
+test("persistent tasks run concurrently via ctx.spawn, prefix output, and cancel siblings on failure", async ({
+  workspace,
+}) => {
+  const ws = workspace as WorkspaceHelper;
+  const outLines: string[] = [];
+
+  const srvA = tool({ name: "srv_a", persistent: true }, async (ctx) => {
+    await ctx.spawn([
+      process.execPath,
+      "-e",
+      [
+        'const fs = require("node:fs");',
+        'fs.writeFileSync("a.ready", "1");',
+        'console.log("A_BOOT");',
+        "setTimeout(() => {}, 30000);",
+      ].join(" "),
+    ]);
+  });
+
+  const srvB = tool({ name: "srv_b", persistent: true }, async (ctx) => {
+    await ctx.spawn([
+      process.execPath,
+      "-e",
+      [
+        'const fs = require("node:fs");',
+        "const deadline = Date.now() + 3000;",
+        'while (!fs.existsSync("a.ready") && Date.now() < deadline) { Bun.sleepSync(10); }',
+        'if (!fs.existsSync("a.ready")) process.exit(3);',
+        'console.log("B_SAW_A");',
+        "process.exit(2);",
+      ].join(" "),
+    ]);
+  });
+
+  const registry = createTaskRegistry(loadRegistryConfig(ws.root), {
+    srv_a: {
+      definition: srvA,
+      canonicalName: "srv_a",
+      cliPath: ["srv_a"],
+      sourcePath: "srv_a.ts",
+      rootDir: ws.root,
+      projectRoot: ws.root,
+      description: "",
+    },
+    srv_b: {
+      definition: srvB,
+      canonicalName: "srv_b",
+      cliPath: ["srv_b"],
+      sourcePath: "srv_b.ts",
+      rootDir: ws.root,
+      projectRoot: ws.root,
+      description: "",
+    },
+  });
+
+  const report = await executeOrder(registry, ["srv_a", "srv_b"], {
+    stdoutWriter: (chunk) => outLines.push(chunk),
+  });
+  expect(report.exitCode).toBe(2);
+  expect(report.failedTask).toBe("srv_b");
+  expect(report.cancelled).toEqual(["srv_a"]);
+  expect(outLines.join("")).toContain("[srv_a] A_BOOT");
+  expect(outLines.join("")).toContain("[srv_b] B_SAW_A");
+});

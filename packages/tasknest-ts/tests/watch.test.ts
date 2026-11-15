@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig } from "@/src/config";
 import { createTaskRegistry } from "@/src/discovery";
+import { ValidationError } from "@/src/errors";
 import { tool } from "@/src/task";
 import { WatchSession } from "@/src/watch";
 
@@ -177,5 +178,22 @@ describe("watch session dirty subgraph and self-output filtering", () => {
     const c3 = await session.step();
     expect(c3?.executed).toEqual(["read_ver", "downstream"]);
     expect(readFileSync(join(root, "out.txt"), "utf-8")).toBe("0.3.0");
+  });
+
+  it("rejects persistent tasks in WatchSession", () => {
+    const root = makeTempDir();
+    const devTask = tool({ name: "dev", persistent: true }, () => {});
+    const registry = createTaskRegistry(loadConfig(root), {
+      dev: {
+        definition: devTask,
+        canonicalName: "dev",
+        cliPath: ["dev"],
+        sourcePath: "dev.ts",
+        rootDir: root,
+        projectRoot: root,
+        description: "",
+      },
+    });
+    expect(() => new WatchSession(registry, "dev", { useFsWatch: false })).toThrow(ValidationError);
   });
 });

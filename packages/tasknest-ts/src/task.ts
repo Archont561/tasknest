@@ -43,6 +43,7 @@ export interface ToolConfig {
   readonly inputs?: readonly string[];
   readonly outputs?: readonly string[];
   readonly cache?: boolean;
+  readonly persistent?: boolean;
   readonly env?: readonly string[];
   readonly resources?: readonly string[];
 }
@@ -58,6 +59,7 @@ export interface TaskDefinition {
   readonly inputs: readonly string[];
   readonly outputs: readonly string[];
   readonly cache: boolean;
+  readonly persistent: boolean;
   readonly env: readonly string[];
   readonly resources: readonly string[];
   readonly handler: TaskHandler;
@@ -147,6 +149,15 @@ export function tool(
     seenFlags.add(opt.flagName);
   }
 
+  if (config.persistent !== undefined && typeof config.persistent !== "boolean") {
+    throw new ValidationError(`persistent option for task '${taskName}' must be a boolean.`);
+  }
+  const cache = Boolean(config.cache ?? false);
+  const persistent = Boolean(config.persistent ?? false);
+  if (persistent && cache) {
+    throw new ValidationError(`Persistent task '${taskName}' cannot enable cache.`);
+  }
+
   const def: TaskDefinition = {
     kind: "tasknest.tool",
     name: taskName,
@@ -157,7 +168,8 @@ export function tool(
     options,
     inputs: [...(config.inputs ?? [])],
     outputs: [...(config.outputs ?? [])],
-    cache: Boolean(config.cache ?? false),
+    cache,
+    persistent,
     env: [...(config.env ?? [])],
     resources: [...(config.resources ?? [])],
     handler,

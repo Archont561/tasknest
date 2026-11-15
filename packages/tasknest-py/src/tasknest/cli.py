@@ -14,8 +14,8 @@ from tasknest._cli_flags import (
     GlobalOpts,
     RunCliFlags,
     parse_global_opts,
-    parse_mark_flags,
     parse_run_flags,
+    parse_select_flags,
     parse_skill_flags,
     parse_task_args,
     parse_watch_flags,
@@ -38,7 +38,13 @@ from tasknest.graph import (
 )
 from tasknest.report import ReportMetadata, serialize_json_report, write_json_report
 from tasknest.skill import check_skill, write_skill
-from tasknest.validation import format_effect_summary, select_tasks_by_marks, validate_registry
+from tasknest.validation import (
+    format_effect_summary,
+    matches_package,
+    select_tasks_by_marks,
+    select_tasks_each,
+    validate_registry,
+)
 from tasknest.watch import WatchConfig, WatchCycle, WatchSession
 
 if TYPE_CHECKING:
@@ -63,7 +69,9 @@ _GLOBAL_USAGE = (
 
 
 def _split_task_tokens(
-    tokens: Sequence[str], registry: TaskRegistry
+    tokens: Sequence[str],
+    registry: TaskRegistry,
+    packages: Sequence[str] = (),
 ) -> tuple[TaskDefinition, list[str]]:
     if DOUBLE_DASH in tokens:
         sep = tokens.index(DOUBLE_DASH)
@@ -77,11 +85,21 @@ def _split_task_tokens(
         path_end += 1
     if path_end == 0:
         raise CliUsageError("Expected a task path.")
+    path_tokens = head[:path_end]
+    rest_head = head[path_end:]
+    if len(packages) == 1 and path_tokens[0] != packages[0] and "." not in path_tokens[0]:
+        scoped = [*packages[0].split("."), *path_tokens]
+        with contextlib.suppress(DiscoveryError):
+            task, extra_pos = registry.resolve_path(scoped)
+            return task, [*extra_pos, *rest_head, *tail]
     try:
-        task, extra_pos = registry.resolve_path(head[:path_end])
+        task, extra_pos = registry.resolve_path(path_tokens)
     except DiscoveryError as exc:
         raise CliUsageError(str(exc)) from exc
-    return task, [*extra_pos, *head[path_end:], *tail]
+    if packages and not matches_package(task, packages):
+        pkg_list = _COMMA_SEP.join(packages)
+        raise CliUsageError(f"Task '{task.name}' is not in selected package(s): {pkg_list}.")
+    return task, [*extra_pos, *rest_head, *tail]
 
 
 def _format_task_help(task: TaskDefinition) -> str:
@@ -95,6 +113,7 @@ def _format_task_help(task: TaskDefinition) -> str:
         ("requires", _COMMA_SEP.join(task.requires)),
         ("inputs", _COMMA_SEP.join(task.inputs)),
         ("outputs", _COMMA_SEP.join(task.outputs)),
+        ("persistent", "true" if task.persistent else ""),
     )
     lines.extend(f"  {label}: {val}" for label, val in metadata if val)
     if task.options:
@@ -111,16 +130,19 @@ def _print_effects(registry: TaskRegistry, names: Sequence[str]) -> None:
 
 
 def _cmd_ls(registry: TaskRegistry, rest: Sequence[str]) -> int:
-    marks, extra = parse_mark_flags(rest)
+    sel, extra = parse_select_flags(rest, allow_each=False)
     if extra:
-        raise CliUsageError("ls accepts only --mark <name> options.")
+        raise CliUsageError("ls accepts only --mark <name> and --package <name> options.")
     for task in registry.ordered_tasks():
-        if marks and not any(m in task.marks for m in marks):
+        if sel.marks and not any(m in task.marks for m in sel.marks):
+            continue
+        if sel.packages and not matches_package(task, sel.packages):
             continue
         summary = task.description.splitlines()[0] if task.description else ""
         path = _SPACE.join(task.cli_path)
         mark_suffix = f" [marks: {_COMMA_SEP.join(task.marks)}]" if task.marks else ""
-        base = f"{path} ({task.name}){mark_suffix}"
+        persistent_suffix = " [persistent]" if task.persistent else ""
+        base = f"{path} ({task.name}){mark_suffix}{persistent_suffix}"
         print(f"{base} - {summary}" if summary else base)
     return 0
 
@@ -148,13 +170,19 @@ def _cmd_check(registry: TaskRegistry, rest: Sequence[str]) -> int:
 
 
 def _cmd_plan(registry: TaskRegistry, rest: Sequence[str]) -> int:
-    marks, remaining = parse_mark_flags(rest)
-    if marks:
+    sel, remaining = parse_select_flags(rest)
+    if sel.marks and sel.each:
+        raise CliUsageError("plan --mark cannot be combined with --each.")
+    if sel.each:
+        if remaining:
+            raise CliUsageError("plan --each cannot be combined with a task path.")
+        order = select_tasks_each(registry, sel.each, packages=sel.packages)
+    elif sel.marks:
         if remaining:
             raise CliUsageError("plan --mark cannot be combined with a task path.")
-        order = select_tasks_by_marks(registry, marks)
+        order = select_tasks_by_marks(registry, sel.marks, packages=sel.packages)
     else:
-        task, extra = _split_task_tokens(remaining, registry)
+        task, extra = _split_task_tokens(remaining, registry, sel.packages)
         if extra:
             raise CliUsageError(f"Unexpected arguments to plan: {_SPACE.join(extra)}")
         order = plan_execution(registry, task.name)
@@ -209,13 +237,13 @@ def _emit_run_outputs(
     return int(report.exit_code)
 
 
-def _run_with_marks(
+def _run_selected_order(
     registry: TaskRegistry,
+    order: tuple[str, ...],
     flags: RunCliFlags,
     opts: RunOptions,
     affected: AffectedContext,
 ) -> int:
-    order = select_tasks_by_marks(registry, flags.marks)
     if not flags.json_output:
         _print_effects(registry, order)
     redirect = (
@@ -237,11 +265,19 @@ def _cmd_run(registry: TaskRegistry, rest: Sequence[str], *, is_verbose: bool) -
         affected=affected,
         quiet_stdout=flags.json_output,
     )
+    if flags.marks and flags.each:
+        raise CliUsageError("run --mark cannot be combined with --each.")
+    if flags.each:
+        if remaining:
+            raise CliUsageError("run --each cannot be combined with a task path.")
+        order = select_tasks_each(registry, flags.each, packages=flags.packages)
+        return _run_selected_order(registry, order, flags, opts, affected)
     if flags.marks:
         if remaining:
             raise CliUsageError("run --mark cannot be combined with a task path.")
-        return _run_with_marks(registry, flags, opts, affected)
-    task, extra = _split_task_tokens(remaining, registry)
+        order = select_tasks_by_marks(registry, flags.marks, packages=flags.packages)
+        return _run_selected_order(registry, order, flags, opts, affected)
+    task, extra = _split_task_tokens(remaining, registry, flags.packages)
     kwargs, wants_help = parse_task_args(task, extra)
     if wants_help:
         print(_format_task_help(task))

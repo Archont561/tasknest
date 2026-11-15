@@ -28,6 +28,7 @@ interface ScenarioTask {
   readonly inputs?: readonly string[];
   readonly outputs?: readonly string[];
   readonly cache?: boolean;
+  readonly persistent?: boolean;
   readonly options?: readonly ScenarioOption[];
   readonly prints?: readonly string[];
   readonly failMessage?: string;
@@ -71,6 +72,7 @@ function renderTsTask(task: ScenarioTask): string {
     inputs: task.inputs ?? [],
     outputs: task.outputs ?? [],
     cache: task.cache ?? false,
+    persistent: task.persistent ?? false,
     options: (task.options ?? []).map((opt) => ({
       name: opt.name,
       type: opt.type ?? "string",

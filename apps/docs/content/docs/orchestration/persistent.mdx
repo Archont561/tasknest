@@ -1,0 +1,45 @@
+---
+title: Persistent Tasks (Dev Servers)
+description: Run long-lived development servers and watchers concurrently with prefixed logs and clean teardown.
+---
+
+Mark long-lived tasks such as `next dev`, API servers, or watch bundlers with `persistent=True` (`persistent: true` in TypeScript).
+
+## Defining Persistent Tasks
+
+### Python (`@tool(persistent=True)`)
+
+```python
+@tool(name="docs.dev", marks=["dev"], depends=["build"], persistent=True)
+def dev_docs(ctx: ToolContext) -> None:
+    """Start the docs dev server."""
+    ctx.run(["bun", "run", "--cwd", "apps/docs", "dev"])
+```
+
+### TypeScript (`persistent: true` + `ctx.spawn`)
+
+Use `await ctx.spawn(...)` in TypeScript persistent tasks so multiple servers/watchers run non-blockingly in the same Bun or Node.js process and respect `ctx.signal` cancellation:
+
+```ts
+export default tool(
+  {
+    name: "docs.dev",
+    marks: ["dev"],
+    depends: ["build"],
+    persistent: true,
+    description: "Start the docs dev server.",
+  },
+  async (ctx) => {
+    await ctx.spawn(["bun", "run", "--cwd", "apps/docs", "dev"]);
+  },
+);
+```
+
+## Orchestration & Guarantees
+
+- **Non-persistent prerequisites first:** A persistent task may `depend` on one-shot tasks (such as `build`), which finish before the persistent tasks start.
+- **No dependents on persistent tasks:** No task may `depend` on a `persistent` task (`check` / graph validation fails with exit code `2`).
+- **No caching:** Persistent tasks cannot enable `cache`.
+- **Automatic concurrency & prefixed output:** Running `tasknest run --mark dev` automatically allocates concurrent workers for all persistent tasks in the plan and prefixes each streamed line with `[<task_name>] `. Passing an explicit `--jobs` smaller than the number of persistent tasks fails fast with exit code `2`.
+- **Coordinated teardown:** Pressing `Ctrl+C` (`SIGINT` / `SIGTERM`), or a failure in any persistent task, aborts all sibling persistent tasks and terminates their child process groups cleanly.
+- **Incompatible with `tasknest watch`:** `tasknest watch` runs discrete DAG rebuilds and rejects persistent targets with exit code `2`.

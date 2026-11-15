@@ -28,6 +28,7 @@ Run repository tasks with `{{ command }}`.
 {% endif %}{% if task.marks %}- Marks: {{ task.marks }}
 {% endif %}{% if task.requires %}- Requires: {{ task.requires }}
 {% endif %}{% if task.depends %}- Depends: {{ task.depends }}
+{% endif %}{% if task.persistent %}- Persistent: true
 {% endif %}{% if task.options %}- Options: {{ task.options }}
 {% endif %}{% endfor %}"""
 
@@ -57,6 +58,7 @@ def _format_task_entry(task: TaskDefinition, command: str) -> dict[str, str]:
         "marks": _COMMA_SEP.join(task.marks),
         "requires": _COMMA_SEP.join(task.requires),
         "depends": deps,
+        "persistent": "true" if task.persistent else "",
         "options": opts,
     }
 

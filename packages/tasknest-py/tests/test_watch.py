@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import pytest
 from tasknest.discovery import discover_tasks
+from tasknest.errors import ValidationError
 from tasknest.watch import WatchConfig, WatchSession
 
 if TYPE_CHECKING:
@@ -83,3 +85,18 @@ def test_watch_ignores_self_outputs_and_uses_early_cutoff(tmp_path: Path) -> Non
     assert c3 is not None
     assert c3.report.succeeded == ("read_ver", "downstream")
     assert (tmp_path / "downstream.log").read_text("utf-8").splitlines() == ["0.2.0", "0.3.0"]
+
+
+def test_watch_session_rejects_persistent_task(tmp_path: Path) -> None:
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    (tools / "dev.py").write_text(
+        "from tasknest import tool\n"
+        "@tool(persistent=True)\n"
+        "def dev() -> None:\n"
+        "    '''Persistent task.'''\n",
+        encoding="utf-8",
+    )
+    registry = discover_tasks(tmp_path)
+    with pytest.raises(ValidationError, match="persistent"):
+        WatchSession(registry=registry, target_name="dev")

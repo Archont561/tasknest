@@ -13,7 +13,7 @@ from pytest_bdd import given as bdd_given
 from pytest_bdd import parsers, scenarios, then, when
 from tasknest.discovery import TaskRegistry, discover_tasks
 from tasknest.errors import GraphError
-from tasknest.graph import ExecutionReport, plan_execution, run_plan, validate_graph
+from tasknest.graph import ExecutionReport, plan_execution, run_order, run_plan, validate_graph
 
 scenarios(str(Path(__file__).resolve().parent.parent / "features/dependencies.feature"))
 
@@ -320,3 +320,45 @@ def test_failed_task_discards_buffered_output_and_blocks_dependents(tmp_path: Pa
     assert report.failed == ("bad",)
     assert report.blocked == ("after",)
     assert "bad" not in report.committed_outputs
+
+
+def test_persistent_tasks_run_concurrently_prefix_output_and_cancel_siblings(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    (tools / "srv_a.py").write_text(
+        "import sys\n"
+        "from tasknest import ToolContext, tool\n"
+        "@tool(persistent=True, marks=['dev'])\n"
+        "def srv_a(ctx: ToolContext) -> None:\n"
+        "    '''Persistent server A.'''\n"
+        "    ctx.run([sys.executable, '-u', '-c', "
+        "'import time, pathlib; "
+        'pathlib.Path("a.ready").write_text("1"); '
+        'print("A_BOOT", flush=True); '
+        "time.sleep(30)'])\n",
+        encoding="utf-8",
+    )
+    (tools / "srv_b.py").write_text(
+        "import sys\n"
+        "from tasknest import ToolContext, tool\n"
+        "@tool(persistent=True, marks=['dev'])\n"
+        "def srv_b(ctx: ToolContext) -> None:\n"
+        "    '''Persistent server B.'''\n"
+        "    ctx.run([sys.executable, '-u', '-c', "
+        "'import time, sys, pathlib; "
+        '[time.sleep(0.02) for _ in range(100) if not pathlib.Path("a.ready").exists()]; '
+        'assert pathlib.Path("a.ready").exists(); '
+        'print("B_SAW_A", flush=True); '
+        "sys.exit(2)'])\n",
+        encoding="utf-8",
+    )
+    registry = discover_tasks(tmp_path)
+    report = run_order(registry, ("srv_a", "srv_b"))
+    captured = capsys.readouterr()
+    assert report.exit_code == 2
+    assert report.failed == ("srv_b",)
+    assert report.cancelled == ("srv_a",)
+    assert "[srv_a] A_BOOT" in captured.out
+    assert "[srv_b] B_SAW_A" in captured.out

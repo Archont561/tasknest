@@ -8,6 +8,7 @@ Milestone M4 adds composable execution primitives shared across `tasknest-py` an
 1. **[Data Passing & Scoped Env](/docs/orchestration/data-passing):** `ctx.output(...)`, read-only `ctx.deps[...]`, and task-local `ctx.env(...)`.
 2. **[Opt-In Caching](/docs/orchestration/caching):** Content-hashed `.tasknest/cache/` with early cutoff and declared-output verification.
 3. **[Parallelism & Resource Safety](/docs/orchestration/parallelism):** `--jobs`, `resources` conflict locking, `TASKNEST_WORKER_BUDGET`, and `--fail-fast`.
-4. **[Affected Change Selection](/docs/orchestration/affected):** `ctx.affected` git diff context and conservative fallback selectors.
-5. **[DAG-Aware Watch Mode](/docs/orchestration/watch):** `tasknest watch <task>` with self-output filtering and early cutoff.
-6. **[JSON Reports & Redaction](/docs/orchestration/reports):** Versioned `schema_version = 1` reports with `--json` stdout purity and secret redaction.
+4. **[Persistent Tasks (Dev Servers)](/docs/orchestration/persistent):** Long-lived servers/watchers with automatic concurrency, prefixed logs, and sibling teardown.
+5. **[Affected Change Selection](/docs/orchestration/affected):** `ctx.affected` git diff context and conservative fallback selectors.
+6. **[DAG-Aware Watch Mode](/docs/orchestration/watch):** `tasknest watch <task>` with self-output filtering and early cutoff.
+7. **[JSON Reports & Redaction](/docs/orchestration/reports):** Versioned `schema_version = 1` reports with `--json` stdout purity and secret redaction.

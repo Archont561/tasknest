@@ -21,12 +21,23 @@ _NO_PREFIX = "no-"
 _PAIR_STEP = 2
 _NEG_PREFIX_LEN = 3
 _FLAG_MARK = "--mark"
+_FLAG_PACKAGE = "--package"
+_FLAG_EACH = "--each"
 _FLAG_JOBS = "--jobs"
 _FLAG_REPORT = "--report"
 _FLAG_CHANGED_BASE = "--changed-base"
 _FLAG_CHANGED = "--changed"
 _FLAG_INTERVAL = "--interval"
 _FLAG_MAX_CYCLES = "--max-cycles"
+
+
+@dataclass
+class SelectCliFlags:
+    """Selection flags accepted on `ls` and `plan`."""
+
+    marks: list[str] = field(default_factory=list)
+    packages: list[str] = field(default_factory=list)
+    each: str | None = None
 
 
 @dataclass(frozen=True)
@@ -54,6 +65,8 @@ class RunCliFlags:
     """Runner-level options accepted before the task path on `run`."""
 
     marks: list[str] = field(default_factory=list)
+    packages: list[str] = field(default_factory=list)
+    each: str | None = None
     jobs: int | None = None
     cache_mode: CacheMode = "default"
     json_output: bool = False
@@ -210,6 +223,29 @@ def parse_mark_flags(tokens: Sequence[str]) -> tuple[list[str], list[str]]:
     return marks, list(tokens[idx:])
 
 
+def parse_select_flags(
+    tokens: Sequence[str], *, allow_each: bool = True
+) -> tuple[SelectCliFlags, list[str]]:
+    """Parse --mark, --package/-p, and optional --each flags."""
+    flags = SelectCliFlags()
+    idx = 0
+    while idx < len(tokens):
+        tok = tokens[idx]
+        if _match_value_flag(tok, _FLAG_MARK):
+            val, idx = _consume_value_flag(tok, tokens, idx, _FLAG_MARK)
+            flags.marks.append(val)
+        elif tok == "-p" or _match_value_flag(tok, _FLAG_PACKAGE):
+            val, idx = _consume_value_flag(tok, tokens, idx, _FLAG_PACKAGE)
+            flags.packages.append(val)
+        elif allow_each and _match_value_flag(tok, _FLAG_EACH):
+            flags.each, idx = _consume_value_flag(tok, tokens, idx, _FLAG_EACH)
+        elif tok.startswith(DASH):
+            raise CliUsageError(f"Unknown selection option: {tok}")
+        else:
+            break
+    return flags, list(tokens[idx:])
+
+
 def _parse_positive_int(raw: str, flag: str) -> int:
     try:
         value = int(raw)
@@ -251,6 +287,13 @@ def _apply_run_flag_token(tok: str, tokens: Sequence[str], idx: int, flags: RunC
     if _match_value_flag(tok, _FLAG_MARK):
         val, next_idx = _consume_value_flag(tok, tokens, idx, _FLAG_MARK)
         flags.marks.append(val)
+        return next_idx
+    if tok == "-p" or _match_value_flag(tok, _FLAG_PACKAGE):
+        val, next_idx = _consume_value_flag(tok, tokens, idx, _FLAG_PACKAGE)
+        flags.packages.append(val)
+        return next_idx
+    if _match_value_flag(tok, _FLAG_EACH):
+        flags.each, next_idx = _consume_value_flag(tok, tokens, idx, _FLAG_EACH)
         return next_idx
     if tok == "-j" or _match_value_flag(tok, _FLAG_JOBS):
         val, next_idx = _consume_value_flag(tok, tokens, idx, _FLAG_JOBS)

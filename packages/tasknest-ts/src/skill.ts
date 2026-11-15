@@ -18,6 +18,7 @@ export const DEFAULT_SKILL_TEMPLATE = [
   "{% endif %}{% if task.marks %}- Marks: {{ task.marks }}",
   "{% endif %}{% if task.requires %}- Requires: {{ task.requires }}",
   "{% endif %}{% if task.depends %}- Depends: {{ task.depends }}",
+  "{% endif %}{% if task.persistent %}- Persistent: true",
   "{% endif %}{% if task.options %}- Options: {{ task.options }}",
   "{% endif %}{% endfor %}",
 ].join("\n");
@@ -50,6 +51,7 @@ function formatTaskEntry(task: DiscoveredTask, command: string): Record<string, 
     marks: task.definition.marks.join(", "),
     requires: task.definition.requires.join(", "),
     depends: deps,
+    persistent: task.definition.persistent ? "true" : "",
     options: opts,
   };
 }

@@ -7,9 +7,10 @@ import time
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from threading import Lock
+from threading import Event, Lock
 from typing import TYPE_CHECKING, Any
 
+from tasknest._process import install_interrupt_handlers, resolve_persistent_workers
 from tasknest.affected import AffectedContext
 from tasknest.cache import CacheContext, CacheMode, lookup_cache, store_cache
 from tasknest.context import BufferedOutput, DepsMapping, ToolContext
@@ -40,6 +41,7 @@ class RunOptions:
     target_name: str | None = None
     target_kwargs: Mapping[str, Any] = field(default_factory=dict)
     quiet_stdout: bool = False
+    cancel_event: Event | None = None
 
 
 @dataclass(frozen=True)
@@ -68,6 +70,7 @@ class _TaskOutcome:
     output: BufferedOutput | None = None
     error_message: str | None = None
     exit_code: int = 0
+    cancelled: bool = False
 
 
 @dataclass
@@ -96,6 +99,8 @@ class _ExecEnv:
     base_env: Mapping[str, str]
     target_name: str | None
     target_kwargs: dict[str, Any]
+    cancel_event: Event
+    has_persistent: bool = False
 
 
 def compute_worker_budget(requested_jobs: int, task_count: int) -> int:
@@ -142,6 +147,10 @@ def validate_graph(registry: TaskRegistry) -> dict[str, tuple[str, ...]]:
 
     for name in sorted(resolved):
         visit(name, [])
+    for name, deps in resolved.items():
+        for dep_name in deps:
+            if registry.tasks[dep_name].persistent:
+                raise GraphError(f"Task {name!r} cannot depend on persistent task {dep_name!r}.")
     return resolved
 
 
@@ -174,6 +183,7 @@ def _build_task_context(task: TaskDefinition, env: _ExecEnv) -> tuple[ToolContex
         dep_hashes = {
             d: env.state.output_hashes[d] for d in allowed if d in env.state.output_hashes
         }
+    prefix = f"[{task.name}] " if (env.has_persistent and not env.opts.quiet_stdout) else None
     ctx = ToolContext(
         repo_root=env.registry.config.repo_root,
         project_root=proj_root,
@@ -183,8 +193,31 @@ def _build_task_context(task: TaskDefinition, env: _ExecEnv) -> tuple[ToolContex
         deps=DepsMapping(task.name, allowed, dep_vals),
         affected=env.opts.affected or AffectedContext(),
         quiet_stdout=env.opts.quiet_stdout,
+        cancel_event=env.cancel_event,
+        line_prefix=prefix,
     )
     return ctx, dep_hashes
+
+
+def _failure_outcome(
+    task: TaskDefinition,
+    ctx: ToolContext,
+    elapsed: float,
+    error_text: str,
+    code: int,
+) -> tuple[TaskRunRecord, BufferedOutput | None, str | None, int, bool]:
+    cancelled = ctx.is_cancelled
+    rec = TaskRunRecord(
+        name=task.name,
+        status="cancelled" if cancelled else "failed",
+        cache_status="miss" if task.cache else "disabled",
+        duration_ms=elapsed,
+        commands=ctx.recorded_commands(),
+        error=error_text,
+    )
+    if cancelled:
+        return rec, None, None, code or 130, True
+    return rec, None, error_text, code or 1, False
 
 
 def _run_callable_and_record(
@@ -193,7 +226,7 @@ def _run_callable_and_record(
     kwargs: dict[str, Any],
     cache_ctx: CacheContext,
     started: float,
-) -> tuple[TaskRunRecord, BufferedOutput | None, str | None, int]:
+) -> tuple[TaskRunRecord, BufferedOutput | None, str | None, int, bool]:
     try:
         if task.takes_context:
             task.callable_fn(ctx, **kwargs)
@@ -201,26 +234,10 @@ def _run_callable_and_record(
             task.callable_fn(**kwargs)
     except ToolError as exc:
         elapsed = (time.perf_counter() - started) * _MS_PER_SEC
-        rec = TaskRunRecord(
-            name=task.name,
-            status="failed",
-            cache_status="miss" if task.cache else "disabled",
-            duration_ms=elapsed,
-            commands=ctx.recorded_commands(),
-            error=str(exc),
-        )
-        return rec, None, str(exc), exc.exit_code or 1
+        return _failure_outcome(task, ctx, elapsed, str(exc), exc.exit_code)
     except Exception as exc:
         elapsed = (time.perf_counter() - started) * _MS_PER_SEC
-        rec = TaskRunRecord(
-            name=task.name,
-            status="failed",
-            cache_status="miss" if task.cache else "disabled",
-            duration_ms=elapsed,
-            commands=ctx.recorded_commands(),
-            error=str(exc),
-        )
-        return rec, None, str(exc), 1
+        return _failure_outcome(task, ctx, elapsed, str(exc), 1)
     pending = ctx.consume_pending_output()
     store_cache(cache_ctx, ctx.accessed_env_snapshot(), pending)
     elapsed = (time.perf_counter() - started) * _MS_PER_SEC
@@ -231,7 +248,7 @@ def _run_callable_and_record(
         commands=ctx.recorded_commands(),
         output_hash=pending.digest if pending else None,
     )
-    return rec, pending, None, 0
+    return rec, pending, None, 0, False
 
 
 def _execute_single_task(name: str, env: _ExecEnv) -> _TaskOutcome:
@@ -261,7 +278,9 @@ def _execute_single_task(name: str, env: _ExecEnv) -> _TaskOutcome:
             selection_reason=sel_reason,
         )
         return _TaskOutcome(name=name, record=rec, output=lookup.output)
-    raw_rec, pending, err, code = _run_callable_and_record(task, ctx, kwargs, cache_ctx, started)
+    raw_rec, pending, err, code, is_cancelled = _run_callable_and_record(
+        task, ctx, kwargs, cache_ctx, started
+    )
     rec = TaskRunRecord(
         name=raw_rec.name,
         status=raw_rec.status,
@@ -273,17 +292,31 @@ def _execute_single_task(name: str, env: _ExecEnv) -> _TaskOutcome:
         output_hash=raw_rec.output_hash,
         selection_reason=sel_reason,
     )
-    return _TaskOutcome(name=name, record=rec, output=pending, error_message=err, exit_code=code)
+    return _TaskOutcome(
+        name=name,
+        record=rec,
+        output=pending,
+        error_message=err,
+        exit_code=code,
+        cancelled=is_cancelled,
+    )
 
 
-def _record_outcome(outcome: _TaskOutcome, state: _RunState) -> None:
+def _record_outcome(outcome: _TaskOutcome, env: _ExecEnv) -> None:
+    state = env.state
     with state.lock:
         state.records[outcome.name] = outcome.record
+        if outcome.cancelled:
+            state.cancelled.append(outcome.name)
+            state.unmet.add(outcome.name)
+            return
         if outcome.error_message is not None:
             state.failed.append(outcome.name)
             state.unmet.add(outcome.name)
             state.errors[outcome.name] = outcome.error_message
             state.exit_code = state.exit_code or outcome.exit_code
+            if env.has_persistent or env.opts.fail_fast:
+                env.cancel_event.set()
             return
         state.done.add(outcome.name)
         target_list = state.skipped if outcome.record.status == "skipped" else state.succeeded
@@ -302,8 +335,9 @@ def _mark_blocked_or_cancelled(name: str, env: _ExecEnv) -> bool:
             name=name, status="blocked", selection_reason=sel_reason
         )
         return True
-    if env.opts.fail_fast and env.state.failed:
+    if env.cancel_event.is_set() or (env.opts.fail_fast and env.state.failed):
         env.state.cancelled.append(name)
+        env.state.unmet.add(name)
         env.state.records[name] = TaskRunRecord(
             name=name, status="cancelled", selection_reason=sel_reason
         )
@@ -315,7 +349,7 @@ def _run_sequential(order: tuple[str, ...], env: _ExecEnv) -> None:
     for name in order:
         if _mark_blocked_or_cancelled(name, env):
             continue
-        _record_outcome(_execute_single_task(name, env), env.state)
+        _record_outcome(_execute_single_task(name, env), env)
 
 
 def _drain_blocked(pending: list[str], env: _ExecEnv) -> None:
@@ -350,7 +384,7 @@ def _run_parallel(order: tuple[str, ...], env: _ExecEnv, workers: int) -> None:
             for fut in done_futs:
                 done_name = in_flight.pop(fut)
                 active_resources.difference_update(env.registry.tasks[done_name].resources)
-                _record_outcome(fut.result(), env.state)
+                _record_outcome(fut.result(), env)
 
 
 def _execute_order_internal(
@@ -362,9 +396,11 @@ def _execute_order_internal(
 ) -> ExecutionReport:
     started_iso = datetime.now(timezone.utc).isoformat()
     started_perf = time.perf_counter()
-    workers = compute_worker_budget(
+    persistent_count = sum(1 for name in order if registry.tasks[name].persistent)
+    base_workers = compute_worker_budget(
         opts.jobs if opts.jobs is not None else registry.config.jobs, len(order)
     )
+    workers = resolve_persistent_workers(opts.jobs, base_workers, persistent_count)
     order_set = set(order)
     state = _RunState(
         done={name for name in deps_map if name not in order_set},
@@ -374,6 +410,7 @@ def _execute_order_internal(
     t_name, t_kwargs = (
         target_info if target_info[0] is not None else (opts.target_name, dict(opts.target_kwargs))
     )
+    cancel_event = opts.cancel_event or Event()
     env = _ExecEnv(
         registry=registry,
         deps_map=deps_map,
@@ -382,11 +419,16 @@ def _execute_order_internal(
         base_env={"TASKNEST_WORKER_BUDGET": "1"} if workers > 1 else {},
         target_name=t_name,
         target_kwargs=t_kwargs,
+        cancel_event=cancel_event,
+        has_persistent=persistent_count > 0,
     )
-    if workers <= 1:
-        _run_sequential(order, env)
-    else:
-        _run_parallel(order, env, workers)
+    with install_interrupt_handlers(cancel_event, persistent_count > 0) as signal_exit:
+        if workers <= 1:
+            _run_sequential(order, env)
+        else:
+            _run_parallel(order, env, workers)
+    if signal_exit[0] is not None and state.exit_code == 0:
+        state.exit_code = signal_exit[0]
     records = tuple(state.records[name] for name in order if name in state.records)
     return ExecutionReport(
         succeeded=tuple(state.succeeded),

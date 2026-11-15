@@ -27,9 +27,19 @@ export interface DiscoveryRoot {
   readonly projectRoot: string;
 }
 
+export interface ManifestRoot {
+  readonly path: string;
+  readonly namespace: string;
+  readonly runner: string;
+  readonly persistentScripts: readonly string[];
+  readonly excludeScripts: readonly string[];
+}
+
 export interface TasknestConfig {
   readonly repoRoot: string;
   readonly roots: readonly DiscoveryRoot[];
+  readonly manifests: readonly ManifestRoot[];
+  readonly workspaces: boolean;
   readonly marks: Readonly<Record<string, string>>;
   readonly jobs: number;
   readonly checks: ChecksConfig;
@@ -80,22 +90,88 @@ function parseRoot(entry: unknown): DiscoveryRoot {
   };
 }
 
-function parseRoots(raw: Record<string, unknown>): readonly DiscoveryRoot[] {
+function requireStrList(
+  entry: Record<string, unknown>,
+  field: string,
+  label: string,
+): readonly string[] {
+  const value = entry[field];
+  if (value === undefined) {
+    return [];
+  }
+  if (
+    !Array.isArray(value) ||
+    value.some((item) => typeof item !== "string" || item.length === 0)
+  ) {
+    throw new ConfigError(`${label} field '${field}' must be a list of non-empty strings.`);
+  }
+  return [...value];
+}
+
+function parseManifest(entry: unknown): ManifestRoot {
+  if (!isPlainObject(entry) || !("path" in entry)) {
+    throw new ConfigError("Each [[discovery.manifests]] entry must be a table with a 'path'.");
+  }
+  const rawPath = entry.path;
+  if (typeof rawPath !== "string" || rawPath.length === 0) {
+    throw new ConfigError("[[discovery.manifests]] field 'path' must be a non-empty string.");
+  }
+  const rawNamespace = entry.namespace ?? "";
+  if (typeof rawNamespace !== "string") {
+    throw new ConfigError("[[discovery.manifests]] field 'namespace' must be a string.");
+  }
+  const rawRunner = entry.runner ?? "auto";
+  if (typeof rawRunner !== "string" || rawRunner.length === 0) {
+    throw new ConfigError("[[discovery.manifests]] field 'runner' must be a non-empty string.");
+  }
+  return {
+    path: rawPath,
+    namespace: rawNamespace.replace(/^\.+|\.+$/g, ""),
+    runner: rawRunner,
+    persistentScripts: requireStrList(entry, "persistent_scripts", "[[discovery.manifests]]"),
+    excludeScripts: requireStrList(entry, "exclude_scripts", "[[discovery.manifests]]"),
+  };
+}
+
+function parseDiscovery(raw: Record<string, unknown>): {
+  readonly roots: readonly DiscoveryRoot[];
+  readonly manifests: readonly ManifestRoot[];
+  readonly workspaces: boolean;
+} {
   const discovery = raw.discovery;
   if (discovery === undefined) {
-    return [{ path: "tools", namespace: "", projectRoot: "." }];
+    return {
+      roots: [{ path: "tools", namespace: "", projectRoot: "." }],
+      manifests: [],
+      workspaces: false,
+    };
   }
   if (!isPlainObject(discovery)) {
     throw new ConfigError("[discovery] must be a table.");
   }
   const roots = discovery.roots;
+  let parsedRoots: readonly DiscoveryRoot[];
   if (roots === undefined) {
-    return [{ path: "tools", namespace: "", projectRoot: "." }];
-  }
-  if (!Array.isArray(roots)) {
+    parsedRoots = [{ path: "tools", namespace: "", projectRoot: "." }];
+  } else if (!Array.isArray(roots)) {
     throw new ConfigError("[[discovery.roots]] must be an array of tables.");
+  } else {
+    parsedRoots = roots.map(parseRoot);
   }
-  return roots.map(parseRoot);
+  const manifests = discovery.manifests;
+  let parsedManifests: readonly ManifestRoot[];
+  if (manifests === undefined) {
+    parsedManifests = [];
+  } else if (!Array.isArray(manifests)) {
+    throw new ConfigError("[[discovery.manifests]] must be an array of tables.");
+  } else {
+    parsedManifests = manifests.map(parseManifest);
+  }
+  const workspaces = discovery.workspaces ?? false;
+  if (typeof workspaces !== "boolean") {
+    throw new ConfigError("[discovery].workspaces must be a boolean.");
+  }
+  return { roots: parsedRoots, manifests: parsedManifests, workspaces };
 }
 
 function parseMarks(rawMarks: unknown): Record<string, string> {
@@ -210,6 +286,8 @@ export function loadConfig(repoRoot: string, options: LoadConfigOptions = {}): T
     return {
       repoRoot: resolvedRoot,
       roots: [{ path: "tools", namespace: "", projectRoot: "." }],
+      manifests: [],
+      workspaces: false,
       marks: {},
       jobs: 1,
       checks: DEFAULT_CHECKS,
@@ -218,9 +296,12 @@ export function loadConfig(repoRoot: string, options: LoadConfigOptions = {}): T
   }
   const adapter = options.adapter ?? createRuntimeAdapter();
   const raw = adapter.parseToml(readFileSync(target, "utf-8"));
+  const discovery = parseDiscovery(raw);
   return {
     repoRoot: resolvedRoot,
-    roots: parseRoots(raw),
+    roots: discovery.roots,
+    manifests: discovery.manifests,
+    workspaces: discovery.workspaces,
     marks: parseMarks(raw.marks),
     jobs: parseJobs(raw),
     checks: parseChecks(raw),

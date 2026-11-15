@@ -34,6 +34,36 @@ test("Node adapter executes subprocesses via node:child_process", ({ workspace }
   expect(res.timedOut).toBe(false);
 });
 
+test("Node adapter spawnAsync streams lines and cancels cleanly via AbortSignal", async ({
+  workspace,
+}) => {
+  const adapter = createNodeAdapter();
+  const spawnAsync = adapter.spawnAsync;
+  expect(spawnAsync).toBeDefined();
+  const lines: string[] = [];
+  const controller = new AbortController();
+  const res = await spawnAsync?.(
+    [
+      process.execPath,
+      "-e",
+      'console.log("LINE_1"); setTimeout(() => console.log("LINE_2"), 10000);',
+    ],
+    {
+      cwd: workspace.root,
+      signal: controller.signal,
+      onStdoutLine: (line) => {
+        lines.push(line.trim());
+        if (line.includes("LINE_1")) {
+          controller.abort();
+        }
+      },
+    },
+  );
+  expect(res?.cancelled).toBe(true);
+  expect(lines).toContain("LINE_1");
+  expect(lines).not.toContain("LINE_2");
+});
+
 test.prop(
   "Node adapter round-trips generated TOML tables",
   (fc) => ({

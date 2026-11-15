@@ -1,3 +1,4 @@
+import { watch } from "node:fs";
 import { createBunAdapter } from "@/src/bun-adapter";
 import { ConfigError } from "@/src/errors";
 import { createNodeAdapter } from "@/src/node-adapter";
@@ -19,10 +20,29 @@ export interface RuntimeSpawnResult {
   readonly spawnError?: Error;
 }
 
+export interface WatchHandle {
+  close(): void;
+}
+
 export interface RuntimeAdapter {
   readonly runtime: RuntimeName;
   parseToml(content: string): Record<string, unknown>;
   spawn(argv: readonly string[], options: SpawnOptions): RuntimeSpawnResult;
+  watchPath(targetPath: string, onChange: (filename: string | null) => void): WatchHandle;
+}
+
+export function watchPathWithNodeFs(
+  targetPath: string,
+  onChange: (filename: string | null) => void,
+): WatchHandle {
+  const watcher = watch(targetPath, { persistent: false }, (_eventType, filename) => {
+    onChange(typeof filename === "string" ? filename : null);
+  });
+  return {
+    close(): void {
+      watcher.close();
+    },
+  };
 }
 
 export function parseTomlWith(

@@ -266,6 +266,112 @@
           "expectStdoutContains": ["OK"]
         }
       ]
+    },
+    {
+      "id": "data-passing-output-and-deps",
+      "tasks": [
+        {
+          "path": "produce",
+          "name": "produce",
+          "description": "Produce JSON payload.",
+          "outputValue": { "greeting": "hello", "count": 2 }
+        },
+        {
+          "path": "consume",
+          "name": "consume",
+          "description": "Consume producer output.",
+          "depends": ["produce"],
+          "readDep": "produce"
+        }
+      ],
+      "invocations": [
+        {
+          "args": ["run", "consume"],
+          "expectExitCode": 0,
+          "expectStdoutContains": ["DEP:produce:hello:2"]
+        }
+      ]
+    },
+    {
+      "id": "cache-hit-and-missing-output-invalidation",
+      "extraFiles": {
+        "src/in.txt": "seed-v1\n"
+      },
+      "tasks": [
+        {
+          "path": "build",
+          "name": "build",
+          "description": "Cached build.",
+          "cache": true,
+          "inputs": ["src/in.txt"],
+          "outputs": ["dist/out.txt"],
+          "writeFile": { "path": "dist/out.txt", "content": "artifact-v1\n" },
+          "prints": ["BUILD_RAN"]
+        }
+      ],
+      "invocations": [
+        {
+          "args": ["run", "--json", "build"],
+          "expectExitCode": 0,
+          "expectJson": {
+            "schema_version": 1,
+            "status": "passed",
+            "taskCacheStatus": { "build": "miss" }
+          }
+        },
+        {
+          "args": ["run", "--json", "build"],
+          "expectExitCode": 0,
+          "expectJson": {
+            "schema_version": 1,
+            "status": "passed",
+            "taskCacheStatus": { "build": "hit" }
+          }
+        },
+        {
+          "deleteFile": "dist/out.txt",
+          "args": ["run", "--json", "build"],
+          "expectExitCode": 0,
+          "expectJson": {
+            "schema_version": 1,
+            "status": "passed",
+            "taskCacheStatus": { "build": "miss" }
+          }
+        },
+        {
+          "args": ["run", "--json", "--force", "build"],
+          "expectExitCode": 0,
+          "expectJson": {
+            "schema_version": 1,
+            "status": "passed",
+            "taskCacheStatus": { "build": "bypassed" }
+          }
+        }
+      ]
+    },
+    {
+      "id": "json-report-pure-stdout",
+      "tasks": [
+        {
+          "path": "noisy",
+          "name": "noisy",
+          "description": "Prints noisy text.",
+          "prints": ["NOISY_STDOUT"]
+        }
+      ],
+      "invocations": [
+        {
+          "args": ["run", "--json", "noisy"],
+          "expectExitCode": 0,
+          "expectStdoutNotContains": ["NOISY_STDOUT"],
+          "expectStderrContains": ["NOISY_STDOUT"],
+          "expectJson": {
+            "schema_version": 1,
+            "status": "passed",
+            "taskStatus": { "noisy": "passed" }
+          }
+        }
+      ]
     }
   ]
 }

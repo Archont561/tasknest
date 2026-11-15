@@ -40,6 +40,11 @@ export interface ToolConfig {
   readonly requires?: readonly string[];
   readonly description?: string;
   readonly options?: readonly TaskOptionInput[];
+  readonly inputs?: readonly string[];
+  readonly outputs?: readonly string[];
+  readonly cache?: boolean;
+  readonly env?: readonly string[];
+  readonly resources?: readonly string[];
 }
 
 export interface TaskDefinition {
@@ -50,6 +55,11 @@ export interface TaskDefinition {
   readonly requires: readonly string[];
   readonly description: string;
   readonly options: readonly TaskOption[];
+  readonly inputs: readonly string[];
+  readonly outputs: readonly string[];
+  readonly cache: boolean;
+  readonly env: readonly string[];
+  readonly resources: readonly string[];
   readonly handler: TaskHandler;
 }
 
@@ -145,6 +155,11 @@ export function tool(
     requires: [...(config.requires ?? [])],
     description: config.description ?? "",
     options,
+    inputs: [...(config.inputs ?? [])],
+    outputs: [...(config.outputs ?? [])],
+    cache: Boolean(config.cache ?? false),
+    env: [...(config.env ?? [])],
+    resources: [...(config.resources ?? [])],
     handler,
   };
   const current = activeCollectors.at(-1);

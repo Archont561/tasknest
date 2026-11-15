@@ -34,9 +34,9 @@
 > Native Python and TypeScript file-based task runners with shared conventions.
 >
 > Tasknest is a file-oriented task runner targeting task registration,
-> dependencies, quality gates, CLI arguments, and execution reports.
-> `packages/tasknest-py/` implements the M1–M3 Python runner and `packages/tasknest-ts/`
-> implements the M1–M3 TypeScript runner (Bun & Node.js); repository automation in
+> dependencies, quality gates, CLI arguments, parallel execution, caching, watch mode, and execution reports.
+> `packages/tasknest-py/` implements the M1–M4 Python runner and `packages/tasknest-ts/`
+> implements the M1–M4 TypeScript runner (Bun & Node.js); repository automation in
 > `tools/` dogfoods Tasknest itself.
 
 ### 🏠 [Homepage](https://github.com/Archont561/tasknest#readme)

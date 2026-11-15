@@ -1,10 +1,10 @@
 ---
 id: TASKNEST-14
 title: Implement conservative affected task and test selection
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-15T00:46:00Z'
-updated_date: '2026-11-15T15:50:00Z'
+updated_date: '2026-11-15T18:30:00Z'
 labels:
   - feature
 milestone: m-4
@@ -24,8 +24,8 @@ Select tasks and affected test files using explicit reverse-dependency/import ma
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Unknown mappings, shared fixtures, global config/lockfiles, and unmapped renames/deletions trigger full suite or explicit failure
-- [ ] #2 Language-specific import-graph tasks can cache reverse mappings via `ctx.output(...)` and feed `ctx.deps[...]`
-- [ ] #3 Report selected tasks, test files, and fallback reasons
-- [ ] #4 Support full-suite override (`--all` / `--force`)
+- [x] #1 Unknown mappings, shared fixtures, global config/lockfiles, and unmapped renames/deletions trigger full suite or explicit failure
+- [x] #2 Language-specific import-graph tasks can cache reverse mappings via `ctx.output(...)` and feed `ctx.deps[...]`
+- [x] #3 Report selected tasks, test files, and fallback reasons
+- [x] #4 Support full-suite override (`--all` / `--force`)
 <!-- AC:END -->

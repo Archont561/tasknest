@@ -134,3 +134,40 @@ def test_context_missing_executable_raises_tool_error(tmp_path: Path) -> None:
     ctx = ToolContext(repo_root=tmp_path, project_root=tmp_path, task_name="demo")
     with pytest.raises(ToolError, match="Failed to execute"):
         ctx.run(["definitely-nonexistent-binary-tasknest"])
+
+
+def test_context_output_deps_and_scoped_env_isolation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import os
+
+    from tasknest.context import DepsMapping
+
+    monkeypatch.setenv("TASKNEST_TEST_ENV", "outer")
+    deps = DepsMapping("consumer", frozenset({"upstream"}), {"upstream": {"n": 42}})
+    ctx = ToolContext(repo_root=tmp_path, project_root=tmp_path, task_name="consumer", deps=deps)
+
+    assert ctx.deps["upstream"] == {"n": 42}
+    with pytest.raises(ToolError, match="not in declared depends"):
+        _ = ctx.deps["undeclared"]
+
+    assert ctx.env("TASKNEST_TEST_ENV") == "outer"
+    with ctx.scoped_env(TASKNEST_TEST_ENV="inner", LOCAL_ONLY="yes"):
+        assert ctx.env("TASKNEST_TEST_ENV") == "inner"
+        res = ctx.run(
+            [sys.executable, "-c", "import os; print(os.environ['LOCAL_ONLY'])"],
+            capture=True,
+        )
+        assert res.stdout.strip() == "yes"
+        assert "LOCAL_ONLY" not in os.environ
+    assert os.environ["TASKNEST_TEST_ENV"] == "outer"
+    assert ctx.env("LOCAL_ONLY") is None
+
+    with pytest.raises(ToolError, match="JSON-serializable"):
+        ctx.output({1, 2, 3})
+
+    digest = ctx.output({"ok": True})
+    assert len(digest) == 64
+    pending = ctx.consume_pending_output()
+    assert pending is not None
+    assert pending.payload == {"ok": True}

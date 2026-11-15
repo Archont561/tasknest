@@ -5,9 +5,9 @@ type: specification
 created_date: '2026-11-15T00:46:00Z'
 ---
 
-# Future capabilities and safety
+# Capabilities and safety contracts (M4 + invariants)
 
-These are proposed capabilities, not currently available:
+The following safety and operational contracts govern Tasknest's M4 capabilities and ongoing invariants:
 
 - `ctx.affected` carries explicit change provenance and file statuses (`path`, `old_path`, `status`); it does not itself prove which tests are affected. Include old paths for renames and deletions and expose missing change data.
 - Affected task and test selection is distinct from change context. Language-specific analysis tasks (such as cached reverse-import graph tasks emitting `ctx.output(...)`) feed conservative selectors that fall back to the full relevant suite on unknown impact, shared config/lockfile changes, or unmapped files, and report the selection reason.

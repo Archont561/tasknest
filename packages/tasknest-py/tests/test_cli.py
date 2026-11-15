@@ -169,3 +169,50 @@ def test_python_module_entrypoint_prints_version() -> None:
     )
     assert proc.returncode == 0
     assert proc.stdout.strip().startswith(f"tasknest {VERSION}")
+
+
+def test_cli_json_report_and_watch_subcommand(tmp_path: Path) -> None:
+    import json
+
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    (tmp_path / "in.txt").write_text("abc", encoding="utf-8")
+    (tools / "echo.py").write_text(
+        "from tasknest import ToolContext, tool\n"
+        "@tool(inputs=['in.txt'], cache=True)\n"
+        "def echo(ctx: ToolContext) -> None:\n"
+        "    print('noisy task stdout')\n"
+        "    ctx.output({'token': 'ok'})\n",
+        encoding="utf-8",
+    )
+    buf_out = io.StringIO()
+    buf_err = io.StringIO()
+    with contextlib.redirect_stdout(buf_out), contextlib.redirect_stderr(buf_err):
+        rc = main(
+            [
+                "--root",
+                str(tmp_path),
+                "run",
+                "--json",
+                "--report",
+                str(tmp_path / "out/report.json"),
+                "--changed",
+                "in.txt",
+                "echo",
+            ]
+        )
+    assert rc == 0
+    payload = json.loads(buf_out.getvalue())
+    assert payload["schema_version"] == 1
+    assert payload["runner"] == "python"
+    assert payload["tasks"][0]["status"] == "passed"
+    assert "noisy task stdout" in buf_err.getvalue()
+    assert (tmp_path / "out/report.json").is_file()
+
+    watch_out = io.StringIO()
+    with contextlib.redirect_stdout(watch_out):
+        w_rc = main(["--root", str(tmp_path), "watch", "--max-cycles", "1", "--json", "echo"])
+    assert w_rc == 0
+    watch_line = json.loads(watch_out.getvalue().strip().splitlines()[0])
+    assert watch_line["cycle"] == 0
+    assert watch_line["skipped_cached"] == ["echo"]

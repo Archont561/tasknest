@@ -64,6 +64,11 @@ class TaskDefinition:
     description: str = field(default="", compare=False)
     takes_context: bool = field(default=True, compare=False)
     options: tuple[TaskOption, ...] = field(default=(), compare=False)
+    inputs: tuple[str, ...] = field(default=(), compare=False)
+    outputs: tuple[str, ...] = field(default=(), compare=False)
+    cache: bool = field(default=False, compare=False)
+    env: tuple[str, ...] = field(default=(), compare=False)
+    resources: tuple[str, ...] = field(default=(), compare=False)
     source_path: Path | None = field(default=None, compare=False)
     root_dir: Path | None = field(default=None, compare=False)
     project_root: Path | None = field(default=None, compare=False)
@@ -202,6 +207,18 @@ def _summary_from_docstring(target_fn: Any, explicit: str | None) -> str:
     return doc.strip() if doc else ""
 
 
+def _validate_str_tuple(
+    items: tuple[str, ...] | list[str], field_name: str, task_name: str
+) -> tuple[str, ...]:
+    result = tuple(items)
+    for item in result:
+        if type(item) is not str or not item:
+            raise ValidationError(
+                f"{field_name} entries for task {task_name!r} must be non-empty strings."
+            )
+    return result
+
+
 def tool(
     *,
     name: str | None = None,
@@ -209,12 +226,19 @@ def tool(
     marks: tuple[str, ...] | list[str] = (),
     requires: tuple[str, ...] | list[str] = (),
     description: str | None = None,
+    inputs: tuple[str, ...] | list[str] = (),
+    outputs: tuple[str, ...] | list[str] = (),
+    cache: bool = False,
+    env: tuple[str, ...] | list[str] = (),
+    resources: tuple[str, ...] | list[str] = (),
 ) -> Callable[[Callable[..., Any]], TaskDefinition]:
     """Register a Python function as a Tasknest task."""
 
     def decorator(target_fn: Callable[..., Any]) -> TaskDefinition:
         if not callable(target_fn):
             raise ValidationError("@tool must decorate a callable function.")
+        if type(cache) is not bool:
+            raise ValidationError("cache parameter for @tool must be a bool.")
         task_name = name if name is not None else str(getattr(target_fn, "__name__", "task"))
         takes_context, options = inspect_task_signature(target_fn, task_name)
         return TaskDefinition(
@@ -226,6 +250,11 @@ def tool(
             description=_summary_from_docstring(target_fn, description),
             takes_context=takes_context,
             options=options,
+            inputs=_validate_str_tuple(inputs, "inputs", task_name),
+            outputs=_validate_str_tuple(outputs, "outputs", task_name),
+            cache=cache,
+            env=_validate_str_tuple(env, "env", task_name),
+            resources=_validate_str_tuple(resources, "resources", task_name),
         )
 
     return decorator

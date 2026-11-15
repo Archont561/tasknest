@@ -1,0 +1,35 @@
+{
+  "version": 2,
+  "skills": {
+    "bdd-scenarios": {
+      "source": "TheBushidoCollective/han",
+      "sourceType": "github",
+      "skillPath": "plugins/patterns/bdd/skills/bdd-scenarios/SKILL.md",
+      "computedHash": "ae50d92af92f77e74a4b366580b139137963d31d8d39da8fc6bd00fa88d658ae"
+    },
+    "clean-code-principles": {
+      "source": "AsyrafHussin/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/clean-code-principles/SKILL.md",
+      "computedHash": "49afca0e6566fccb9010587585b92c43e27b93b3f7b55ab0e7cb558e2862dc29"
+    },
+    "grill-me": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/productivity/grill-me/SKILL.md",
+      "computedHash": "ab1acb9fbd9eaee03da254abb8a8de228d1e7a07475fe959da4a5eefa34ea4b9"
+    },
+    "grilling": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/productivity/grilling/SKILL.md",
+      "computedHash": "485451958784497cd4c4dbea13cb5bbb579da58fac0d0e45f3bcb310fab68ac7"
+    },
+    "tdd": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/tdd/SKILL.md",
+      "computedHash": "e3e0f78ff1c2d52ffefa0378baa1e80e129d359288cf9a56f4e59afcd2aac86c"
+    }
+  }
+}

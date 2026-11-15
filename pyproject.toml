@@ -30,7 +30,7 @@ markers = [
 # and patterns; CC9 covers documentation. Findings retain the plugin's own
 # severity (warnings are not automatically CI failures).
 [tool.rude]
-select = ["CC0", "CC1", "CC2", "CC3", "CC4", "CC5", "CC6", "CC7", "CC8", "CC9"]
+select = ["C901", "CC0", "CC1", "CC2", "CC3", "CC4", "CC5", "CC6", "CC7", "CC8", "CC9"]
 
 # Explicitly record the upstream default limits so they can be tuned here.
 [tool.rude.rules.CC101]
@@ -39,11 +39,46 @@ max_lines = 30
 [tool.rude.rules.CC103]
 max_returns = 5
 
+[tool.rude.rules.CC606]
+min_attribute_reads = 2
+
 # Suppressions for clean-code rules must include a reason.
 [tool.rude.rules.CC906]
 require_reason_for = ["CC"]
+
+# Every public top-level task in tools/*.py (excluding _*.py helpers) must use @tool.
+[tool.rude.rules.CC804]
+handler_paths = ["tools/"]
+exclude_paths = ["tools/_*.py"]
+required_decorator = "tool"
+ignore_private = true
 
 # Runtime code must not depend on repository bootstrap automation or tests.
 [[tool.rude.rules.CC704.forbidden]]
 from_paths = ["packages/tasknest-py/src/"]
 forbidden_modules = ["tools", "pytest"]
+
+# Keep jinja2 isolated to skill.py so core wheel installs remain dependency-free.
+[[tool.rude.rules.CC704.forbidden]]
+from_paths = ["packages/tasknest-py/src/"]
+exclude_paths = ["packages/tasknest-py/src/tasknest/skill.py"]
+forbidden_modules = ["jinja2"]
+
+# Core data/context layers must not depend on CLI, discovery, graph, or plugins.
+[[tool.rude.rules.CC704.forbidden]]
+from_paths = [
+    "packages/tasknest-py/src/tasknest/errors.py",
+    "packages/tasknest-py/src/tasknest/_version.py",
+    "packages/tasknest-py/src/tasknest/config.py",
+    "packages/tasknest-py/src/tasknest/context.py",
+    "packages/tasknest-py/src/tasknest/task.py",
+]
+forbidden_modules = [
+    "tasknest.cli",
+    "tasknest.discovery",
+    "tasknest.graph",
+    "tasknest.validation",
+    "tasknest.skill",
+    "tasknest.testing",
+    "tasknest.adapters",
+]

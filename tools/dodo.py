@@ -12,6 +12,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 ROOT = Path(__file__).resolve().parent.parent
 _CHECK = "check"
+_LINT = "lint"
 _PYTHON_TARGETS = ("tools", "packages/python")
 _BUN_X = ("bun", "x", "--bun", "--no-install")
 DOIT_CONFIG = {"default_tasks": [_CHECK], "verbosity": 2, "dep_file": str(ROOT / ".doit.db")}
@@ -122,11 +123,12 @@ def task_format_check() -> dict[str, object]:
 
 
 def task_lint() -> dict[str, object]:
-    """Run Python and TypeScript linters."""
+    """Run Python, Gherkin, and TypeScript linters."""
     return _tasks(
         (_command, ("ruff", _CHECK, *_PYTHON_TARGETS)),
         (_command, ("rude", _CHECK, "packages/python/src", "tools")),
-        (_command, (*_BUN_X, "biome", "lint", "packages/tasknest")),
+        (_command, ("gherlint", _LINT, "packages/python/features")),
+        (_command, (*_BUN_X, "biome", _LINT, "packages/tasknest")),
     )
 
 

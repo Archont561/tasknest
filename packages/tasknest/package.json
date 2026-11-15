@@ -32,6 +32,9 @@
     "prepack": "bun run build",
     "test": "bun test"
   },
+  "dependencies": {
+    "smol-toml": "^1.9.1"
+  },
   "peerDependencies": {
     "@huggingface/jinja": "^0.5.13"
   },
@@ -41,10 +44,12 @@
     }
   },
   "devDependencies": {
+    "@aboviq/bun-test-cucumber": "^0.2.0",
     "@archont561/bun-test-utils": "0.2.0",
     "@arethetypeswrong/cli": "0.18.5",
     "@huggingface/jinja": "0.5.13",
     "bunup": "0.16.32",
+    "fast-check": "^4.10.2",
     "publint": "0.3.25"
   }
 }

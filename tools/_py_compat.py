@@ -34,8 +34,10 @@ def _verify_wheel_metadata(whl: Path) -> bool:
     requires = meta.get_all("Requires-Dist") or []
     extras = meta.get_all("Provides-Extra") or []
     has_identity = meta.get("Name") == _PKG_NAME and meta.get("Requires-Python") == ">=3.10"
-    has_optional_deps = "skill" in extras and all("extra ==" in req for req in requires)
-    valid = has_identity and has_optional_deps
+    has_expected_deps = "skill" in extras and all(
+        "extra ==" in req or "python_version" in req for req in requires
+    )
+    valid = has_identity and has_expected_deps
     if not valid:
         print(f"Unexpected metadata in {whl.name}: {meta.items()}", file=sys.stderr)
     return valid
@@ -57,8 +59,10 @@ def _verify_venv_install(
         env = os.environ.copy()
         env["PYTHONPATH"] = os.pathsep.join(site.getsitepackages())
     install_cmd.append(str(artifact))
-    return _run(tuple(install_cmd), tmp_path, env=env) and _run(
-        (str(venv_dir / _BIN / "python"), "-c", _SMOKE_CODE), tmp_path
+    return (
+        _run(tuple(install_cmd), tmp_path, env=env)
+        and _run((str(venv_dir / _BIN / "python"), "-c", _SMOKE_CODE), tmp_path)
+        and _run((str(venv_dir / _BIN / _PKG_NAME), "--version"), tmp_path)
     )
 
 

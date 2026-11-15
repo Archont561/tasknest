@@ -17,6 +17,13 @@ mypy_path = "packages/python/src"
 
 [tool.pytest.ini_options]
 testpaths = ["packages/python/tests"]
+markers = [
+    "cli: CLI behavior scenarios",
+    "context: Execution context scenarios",
+    "discovery: Task discovery scenarios",
+    "graph: Dependency graph scenarios",
+    "smoke: Critical smoke scenarios",
+]
 
 # rude-clean-code is loaded via Rude's plugin entry point. CC0–CC3 are
 # deterministic checks; CC4–CC6 are heuristics; CC7–CC8 cover architecture

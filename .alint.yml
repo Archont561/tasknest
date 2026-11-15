@@ -25,9 +25,9 @@ rules:
     select: tools
     allow:
       - dodo.py
-      - _render*.py
+      - _*.py
     level: error
-    message: tools may only contain dodo.py and _render*.py helpers.
+    message: tools may only contain dodo.py and private _*.py helpers.
   - id: tools-no-subdirectories
     kind: dir_absent
     paths: 'tools/*'

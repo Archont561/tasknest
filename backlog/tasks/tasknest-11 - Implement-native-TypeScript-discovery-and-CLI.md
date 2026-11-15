@@ -17,12 +17,12 @@ ordinal: 11000
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Implement a pure TypeScript runner without embedding the Python runner.
+Implement a pure TypeScript runner without embedding the Python runner, backed by explicit Bun and Node.js runtime adapters so discovery, subprocesses, and CLI execution work on both Bun and Node.js LTS.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [ ] #1 Implement discovery and sequential execution against shared fixtures
 - [ ] #2 Preserve agreed CLI naming and error behavior
-- [ ] #3 Add Bun tests and executable packaging
+- [ ] #3 Provide Bun and Node.js runtime adapters and verify tests and packaging on both runtimes
 <!-- AC:END -->

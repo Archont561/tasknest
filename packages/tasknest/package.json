@@ -1,14 +1,50 @@
 {
   "name": "tasknest",
   "version": "0.1.0-dev.0",
-  "private": true,
+  "private": false,
+  "license": "MIT",
   "type": "module",
   "description": "Native TypeScript task runner scaffold",
-  "exports": "./src/index.ts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "bun": ">=1.1.0",
+    "node": ">=20.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
+    "build": "bunup",
+    "prepack": "bun run build",
     "test": "bun test"
   },
+  "peerDependencies": {
+    "@huggingface/jinja": "^0.5.13"
+  },
+  "peerDependenciesMeta": {
+    "@huggingface/jinja": {
+      "optional": true
+    }
+  },
   "devDependencies": {
-    "@archont561/bun-test-utils": "0.2.0"
+    "@archont561/bun-test-utils": "0.2.0",
+    "@arethetypeswrong/cli": "0.18.5",
+    "@huggingface/jinja": "0.5.13",
+    "bunup": "0.16.32",
+    "publint": "0.3.25"
   }
 }

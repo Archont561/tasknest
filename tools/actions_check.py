@@ -14,6 +14,7 @@ def actions_check(ctx: ToolContext) -> None:
             ".github/workflows/ci.yml",
             ".github/workflows/pages.yml",
             ".github/workflows/publish-sandbox.yml",
+            ".github/workflows/release.yml",
             ".github/workflows/relock.yml",
         ]
     )

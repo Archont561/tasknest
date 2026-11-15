@@ -23,7 +23,7 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: tasknest-tarball
-          path: ${{ runner.temp }}/ts-dist/tasknest-*.tgz
+          path: ${{ runner.temp }}/ts-dist/*.tgz
           retention-days: 1
   python-versions:
     runs-on: ubuntu-latest
@@ -62,11 +62,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tgz=$(ls "${{ runner.temp }}/ts-dist"/tasknest-*.tgz)
+          tgz=$(ls "${{ runner.temp }}/ts-dist"/archont561-tasknest-*.tgz)
           consumer="${{ runner.temp }}/consumer"
           mkdir -p "$consumer"
           printf '{"name":"consumer","type":"module"}\n' > "$consumer/package.json"
-          printf 'import { version } from "tasknest";\nif (!version.endsWith("-dev.0")) throw new Error(version);\n' > "$consumer/check.ts"
+          printf 'import { version } from "@archont561/tasknest";\nif (!version.endsWith("-dev.0")) throw new Error(version);\n' > "$consumer/check.ts"
           cd "$consumer"
           bun add "$tgz"
           bun run check.ts
@@ -90,11 +90,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tgz=$(ls "${{ runner.temp }}/ts-dist"/tasknest-*.tgz)
+          tgz=$(ls "${{ runner.temp }}/ts-dist"/archont561-tasknest-*.tgz)
           consumer="${{ runner.temp }}/consumer"
           mkdir -p "$consumer"
           printf '{"name":"consumer","type":"module"}\n' > "$consumer/package.json"
-          printf 'import { createRequire } from "node:module";\nimport { version } from "tasknest";\nconst pkg = createRequire(import.meta.url)("tasknest/package.json");\nif (!version.endsWith("-dev.0") || pkg.name !== "tasknest") throw new Error(version);\n' > "$consumer/check.mjs"
+          printf 'import { createRequire } from "node:module";\nimport { version } from "@archont561/tasknest";\nconst pkg = createRequire(import.meta.url)("@archont561/tasknest/package.json");\nif (!version.endsWith("-dev.0") || pkg.name !== "@archont561/tasknest") throw new Error(version);\n' > "$consumer/check.mjs"
           cd "$consumer"
           npm install --no-save "$tgz"
           node check.mjs

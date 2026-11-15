@@ -8,6 +8,7 @@ import subprocess
 import urllib.parse
 from pathlib import Path
 
+_UTF8 = "utf-8"
 _CSS_URL = "https://cdn.jsdelivr.net/npm/github-markdown-css@5.9.0/github-markdown.min.css"
 
 _HTML_TEMPLATE = """<!doctype html>
@@ -46,7 +47,7 @@ def _render_gfm(readme_path: Path) -> str:
         "tables: true, strikethrough: true, tasklists: true, autolinks: true"
         "}));"
     )
-    return subprocess.check_output(["bun", "-e", script, str(readme_path)]).decode("utf-8")
+    return subprocess.check_output(["bun", "-e", script, str(readme_path)]).decode(_UTF8)
 
 
 def _rewrite_relative_links(html_body: str, root: Path, repo: str, ref: str) -> str:
@@ -80,10 +81,10 @@ def render_pages(
     body = _rewrite_relative_links(rendered, root, resolved_repo, resolved_ref)
 
     target_dir.mkdir(parents=True, exist_ok=True)
-    (target_dir / ".nojekyll").write_text("", encoding="utf-8")
+    (target_dir / ".nojekyll").write_text("", encoding=_UTF8)
     (target_dir / "index.html").write_text(
         _HTML_TEMPLATE.format(css_url=_CSS_URL, body=body),
-        encoding="utf-8",
+        encoding=_UTF8,
     )
     print(f"WROTE {target_dir / 'index.html'}")
     return True

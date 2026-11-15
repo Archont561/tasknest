@@ -15,6 +15,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 from pytest_bdd import given as bdd_given
 from pytest_bdd import parsers, scenarios, then, when
+from tasknest import VERSION
 from tasknest.cli import main
 
 scenarios(str(Path(__file__).resolve().parent.parent / "features/cli.feature"))
@@ -167,4 +168,4 @@ def test_python_module_entrypoint_prints_version() -> None:
         check=False,
     )
     assert proc.returncode == 0
-    assert proc.stdout.strip().startswith("tasknest 0.1.0")
+    assert proc.stdout.strip().startswith(f"tasknest {VERSION}")

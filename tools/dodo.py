@@ -66,6 +66,15 @@ def _test_python() -> bool:
     return subprocess.run(cmd, cwd=ROOT, env=env, check=False).returncode == 0
 
 
+def _pages() -> bool:
+    tools_dir = str(Path(__file__).resolve().parent)
+    if tools_dir not in sys.path:
+        sys.path.insert(0, tools_dir)
+    from _render_pages import render_pages
+
+    return render_pages(ROOT)
+
+
 def task_alint() -> dict:
     """Check repository policy."""
     return _action("alint", "check")
@@ -78,14 +87,14 @@ def task_sandbox_check() -> dict:
 
 def task_format_check() -> dict:
     """Check Python formatting."""
-    return _action("ruff", "format", "--check", "tools/dodo.py", "packages/python")
+    return _action("ruff", "format", "--check", "tools", "packages/python")
 
 
 def task_lint() -> dict:
     """Run Python linters."""
     return {
         "actions": [
-            (_command, ("ruff", "check", "tools/dodo.py", "packages/python")),
+            (_command, ("ruff", "check", "tools", "packages/python")),
             (_command, ("rude", "check", "packages/python/src")),
         ],
         "uptodate": [False],
@@ -97,6 +106,7 @@ def task_actions_check() -> dict:
     return _action(
         "actionlint",
         ".github/workflows/ci.yml",
+        ".github/workflows/pages.yml",
         ".github/workflows/publish-sandbox.yml",
         ".github/workflows/relock.yml",
     )
@@ -110,6 +120,11 @@ def task_docs_check() -> dict:
 def task_docs_write() -> dict:
     """Generate documentation from templates."""
     return {"basename": "docs-write", "actions": [(_render, (False,))], "uptodate": [False]}
+
+
+def task_pages() -> dict:
+    """Render root README.md into dist/ for GitHub Pages."""
+    return {"actions": [_pages], "uptodate": [False]}
 
 
 def task_test() -> dict:

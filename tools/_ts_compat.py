@@ -44,7 +44,7 @@ def _verify_consumer(root: Path, tgz: Path, tmp_path: Path) -> bool:
     (consumer / _CHECK_FILE).write_text(_CONSUMER_TS, encoding=_UTF8)
     tsc = str(root / "node_modules/.bin/tsc")
     checks = (
-        (_BUN, "add", "--offline", str(tgz)),
+        (_BUN, "add", "--prefer-offline", str(tgz)),
         (_BUN, "run", _CHECK_FILE),
         _tsc_cmd(tsc, "nodenext", "nodenext"),
         _tsc_cmd(tsc, "esnext", "bundler"),

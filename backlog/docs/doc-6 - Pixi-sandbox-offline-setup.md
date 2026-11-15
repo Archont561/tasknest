@@ -37,11 +37,15 @@ pixi install --frozen --offline
 ```
 
 The launcher requires a Git checkout and an available matching sandbox branch.
-Without `PIXI_SANDBOX_FETCH=skip` it may fetch from origin when the branch is
-missing. The project currently has no published branch or transport, so an
-offline restore has **not** been demonstrated. The environment contains Bun,
-but Bun's `node_modules` and the cache for `bun install` are not proven to be
-part of this transport; a fully offline Backlog/skills setup needs separate
-validation. No Windows launcher or platform bundle is configured.
+Without `PIXI_SANDBOX_FETCH=skip` it fetches `sandbox/developer-linux-64` from
+origin when the branch is missing. Restore of the `default` Pixi environment
+has been verified in sandboxed runs (`pixi install --frozen --offline` is a
+no-op afterwards). Note that the `local` Pixi environment (which includes the
+editable `packages/tasknest-py` path dependency) is intentionally excluded from
+`pixi-sandbox.toml` because native packing only carries wheel PyPI
+dependencies. Likewise, Bun `node_modules` and `bun install` caches are not part
+of the Pixi sandbox bundle; a fully offline Backlog/skills/TS-tooling setup needs
+pre-populated `node_modules` or a local Bun cache. No Windows launcher or
+platform bundle is configured.
 
 See the [pixi-sandbox restore guide](https://archont561.github.io/pixi-sandbox/restore/).

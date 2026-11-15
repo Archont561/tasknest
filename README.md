@@ -52,7 +52,7 @@ Project specifications, accepted decisions, and milestones live in
 - [Adapter and testing design](<backlog/docs/doc-4 - Adapter-and-testing-design.md>): proposed adapters and testing utilities
 - [Future capabilities and safety](<backlog/docs/doc-5 - Future-capabilities-and-safety.md>): proposed caching, parallelism, and safety model
 - [Pixi sandbox offline setup](<backlog/docs/doc-6 - Pixi-sandbox-offline-setup.md>): `pixi-sandbox` bundle configuration and offline restore notes
-- [Architecture decisions](backlog/decisions/): accepted design decisions (`decision-1` through `decision-8`)
+- [Architecture decisions](backlog/decisions/): accepted design decisions (`decision-1` through `decision-9`)
 - [Agent instructions](AGENTS.md): contributor and agent guidelines
 
 Planned work is tracked in [`backlog/tasks/`](backlog/tasks/) and [`backlog/milestones/`](backlog/milestones/). Inspect the plan with `pixi run backlog task list --plain`.

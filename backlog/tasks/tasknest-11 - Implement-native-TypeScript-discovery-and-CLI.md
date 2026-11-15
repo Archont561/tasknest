@@ -1,10 +1,10 @@
 ---
 id: TASKNEST-11
 title: Implement native TypeScript discovery and CLI
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-15T00:46:00Z'
-updated_date: '2026-11-15T00:47:00Z'
+updated_date: '2026-11-15T16:15:00Z'
 labels:
   - feature
 milestone: m-3
@@ -22,7 +22,7 @@ Implement a pure TypeScript runner without embedding the Python runner, backed b
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Implement discovery and sequential execution against shared fixtures
-- [ ] #2 Preserve agreed CLI naming and error behavior
-- [ ] #3 Provide Bun and Node.js runtime adapters and verify tests and packaging on both runtimes
+- [x] #1 Implement discovery and sequential execution matching the M1/M3 runner contract
+- [x] #2 Preserve agreed CLI naming and error behavior
+- [x] #3 Provide Bun and Node.js runtime adapters and verify tests and packaging on both runtimes
 <!-- AC:END -->

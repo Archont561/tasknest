@@ -8,5 +8,7 @@ from tasknest import ToolContext, tool
 @tool(description="Run Python (mypy) and TypeScript (tsc) type checks.")
 def typecheck(ctx: ToolContext) -> None:
     """Run Python (mypy) and TypeScript (tsc) type checks."""
-    ctx.run(["mypy", "packages/python", "tools"])
-    ctx.run(["bun", "x", "--bun", "--no-install", "tsc", "-p", "packages/tasknest/tsconfig.json"])
+    ctx.run(["mypy", "packages/tasknest-py", "tools"])
+    ctx.run(
+        ["bun", "x", "--bun", "--no-install", "tsc", "-p", "packages/tasknest-ts/tsconfig.json"]
+    )

@@ -6,17 +6,17 @@ line-length = 100
 select = ["E", "F", "I", "UP", "B", "SIM", "S", "PT", "TC"]
 
 [tool.ruff.lint.per-file-ignores]
-"packages/python/tests/**/*.py" = ["S101"]
+"packages/tasknest-py/tests/**/*.py" = ["S101"]
 "tools/*.py" = ["S603", "S607", "S701"]
 
 [tool.mypy]
 python_version = "3.10"
 strict = true
 warn_unreachable = true
-mypy_path = "packages/python/src"
+mypy_path = "packages/tasknest-py/src"
 
 [tool.pytest.ini_options]
-testpaths = ["packages/python/tests"]
+testpaths = ["packages/tasknest-py/tests"]
 markers = [
     "cli: CLI behavior scenarios",
     "context: Execution context scenarios",
@@ -45,5 +45,5 @@ require_reason_for = ["CC"]
 
 # Runtime code must not depend on repository bootstrap automation or tests.
 [[tool.rude.rules.CC704.forbidden]]
-from_paths = ["packages/python/src/"]
+from_paths = ["packages/tasknest-py/src/"]
 forbidden_modules = ["tools", "pytest"]

@@ -31,14 +31,14 @@ tomli-w = ">=1.2, <2"
 bun-install = "bun install --frozen-lockfile"
 skills = "bun x --bun --no-install skills"
 backlog = "bun x --bun --no-install backlog"
-tools = { cmd = "python -B -m tasknest", env = { PYTHONPATH = "packages/python/src" } }
+tools = { cmd = "python -B -m tasknest", env = { PYTHONPATH = "packages/tasknest-py/src" } }
 sandbox-plan = "pixi-sandbox plan --config pixi-sandbox.toml --json"
 sandbox-check = "pixi-sandbox init --script-path scripts/restore.sh --check"
 sandbox-init = "pixi-sandbox init --script-path scripts/restore.sh"
 hooks-install = "lefthook install"
 
 [feature.local.pypi-dependencies]
-tasknest = { path = "packages/python", editable = true }
+tasknest = { path = "packages/tasknest-py", editable = true }
 
 [environments]
 local = ["local"]

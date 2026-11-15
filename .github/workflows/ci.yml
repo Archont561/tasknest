@@ -15,10 +15,10 @@ jobs:
           pixi-version: v0.84.2
           cache: true
       - run: pixi run --locked bun-install
-      - run: pixi run --locked tools check
-      - run: pixi run --locked tools test
-      - run: pixi run --locked tools py-compat
-      - run: pixi run --locked tools ts-compat
+      - run: pixi run --locked tools run check
+      - run: pixi run --locked tools run test
+      - run: pixi run --locked tools run py_compat
+      - run: pixi run --locked tools run ts_compat
       - run: pixi run --locked bun pm pack --cwd packages/tasknest --destination "${{ runner.temp }}/ts-dist"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -70,6 +70,7 @@ jobs:
           cd "$consumer"
           bun add "$tgz"
           bun run check.ts
+          bun ./node_modules/.bin/tasknest --version
   node-versions:
     needs: quality
     runs-on: ubuntu-latest
@@ -97,3 +98,4 @@ jobs:
           cd "$consumer"
           npm install --no-save "$tgz"
           node check.mjs
+          ./node_modules/.bin/tasknest --version

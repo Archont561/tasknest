@@ -1,7 +1,7 @@
 pre-commit:
   jobs:
     - name: repository-checks
-      run: pixi run --locked tools check
+      run: pixi run --locked tools run check
 commit-msg:
   jobs:
     - name: conventional-commit
@@ -9,4 +9,4 @@ commit-msg:
 pre-push:
   jobs:
     - name: tests
-      run: pixi run --locked tools test
+      run: pixi run --locked tools run test

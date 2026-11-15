@@ -1,4 +1,4 @@
-# Proposed configuration; the Tasknest runtime does not consume this yet.
+# Workspace configuration for the Tasknest runner.
 [tasknest]
 config_version = 1
 

@@ -13,7 +13,6 @@ convco = ">=0.7,<1"
 actionlint = ">=1.7,<2"
 
 [pypi-dependencies]
-doit = ">=0.37,<0.38"
 pytest = ">=8,<10"
 ruff = ">=0.11,<1"
 mypy = ">=1.15,<3"
@@ -32,7 +31,7 @@ tomli-w = ">=1.2, <2"
 bun-install = "bun install --frozen-lockfile"
 skills = "bun x --bun --no-install skills"
 backlog = "bun x --bun --no-install backlog"
-tools = "python -B -m doit -f tools/dodo.py"
+tools = { cmd = "python -B -m tasknest", env = { PYTHONPATH = "packages/python/src" } }
 sandbox-plan = "pixi-sandbox plan --config pixi-sandbox.toml --json"
 sandbox-check = "pixi-sandbox init --script-path scripts/restore.sh --check"
 sandbox-init = "pixi-sandbox init --script-path scripts/restore.sh"

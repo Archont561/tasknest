@@ -43,9 +43,12 @@ def _verify_consumer(root: Path, tgz: Path, tmp_path: Path) -> bool:
     (consumer / "package.json").write_text(_CONSUMER_PKG, encoding=_UTF8)
     (consumer / _CHECK_FILE).write_text(_CONSUMER_TS, encoding=_UTF8)
     tsc = str(root / "node_modules/.bin/tsc")
+    bin_path = str(consumer / "node_modules/.bin/tasknest")
     checks = (
         (_BUN, "add", "--prefer-offline", str(tgz)),
         (_BUN, "run", _CHECK_FILE),
+        (_BUN, bin_path, "--version"),
+        (bin_path, "--version"),
         _tsc_cmd(tsc, "nodenext", "nodenext"),
         _tsc_cmd(tsc, "esnext", "bundler"),
     )

@@ -2,7 +2,7 @@ version: 7
 platforms:
 - name: linux-64
   virtual-packages:
-  - __unix=0=0
+  - __unix=0
   - __linux=4.18
   - __glibc=2.28
   - __archspec=0=x86_64
@@ -75,7 +75,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/85/8d/eef3d8cdccc32abdd91b1286884c99b8c3a6d3b135affcc2a7a0f383bb32/parse_type-0.6.6-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/86/5d/e720b313a6c4af07f1908b7893f2a79bf006ea2abc88428225ebc20d41ec/rude-0.1a4-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/8f/5f/fbe039e06108eefad9e6b1f7d915a9c73ca0451700c7d48ce05eaa3a2833/parse-1.22.4-py2.py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/9c/38/3d6dcbf8379cb86d71a2325210ca3469a33767d8254b74d8c343db26ce87/doit-0.37.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/9e/55/cae87da36610808e4817bb9f8baaf5eee4b4ac63116d72235b7552f4260d/alint-0.22.1-py3-none-manylinux_2_17_x86_64.musllinux_1_2_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/a6/bc/2e35dcb4bfb37a5dd98b8b323158d3103cf263f87164ed03702f6fc5483f/cachetools-8.0.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ac/35/25bd092ca8a7e71192afdca67fbff4f797da74408e74ac3626e13b409ec0/python_discovery-1.9.5-py3-none-any.whl
@@ -849,14 +848,6 @@ packages:
   name: parse
   version: 1.22.4
   sha256: ae430a4477316eed4a9710f642b2db968ec89d5d82e6b0908b8169673b476847
-- pypi: https://files.pythonhosted.org/packages/9c/38/3d6dcbf8379cb86d71a2325210ca3469a33767d8254b74d8c343db26ce87/doit-0.37.0-py3-none-any.whl
-  name: doit
-  version: 0.37.0
-  sha256: a9f181566aa90faac515e276f85e6526019554ed7e13c12cf9dc094ffecf3e1b
-  requires_dist:
-  - tomli ; python_full_version < '3.11' and extra == 'toml'
-  - cloudpickle ; platform_python_implementation != 'PyPy' and extra == 'cloudpickle'
-  requires_python: '>=3.10'
 - pypi: https://files.pythonhosted.org/packages/9e/55/cae87da36610808e4817bb9f8baaf5eee4b4ac63116d72235b7552f4260d/alint-0.22.1-py3-none-manylinux_2_17_x86_64.musllinux_1_2_x86_64.whl
   name: alint
   version: 0.22.1
